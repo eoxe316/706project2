@@ -295,6 +295,35 @@ double KalmanGyro(double rawdata){   // Kalman Filter
   return a_post_est;
 }
 
+double ki_integral = 0;
+#define GYRO_CONSTRAIN 100
+
+void Drive(int speed_val, bool strafe)
+{
+  float kp = 0;
+  float ki = 0;
+  float kd = 0;
+
+  (gyroAngleChange > 3) ? e = 0 : e = gyroAngleChange;
+
+  u = constrain(kp*e + ki*ki_integral, -GYRO_CONSTRAIN, GYRO_CONSTRAIN);
+
+  ki_integral += e;
+  
+  left_font_motor.writeMicroseconds(1500 + speed_val - u);
+  right_rear_motor.writeMicroseconds(1500 - speed_val - u);
+
+  if (strafe)
+  {
+    left_rear_motor.writeMicroseconds(1500 - speed_val - u);
+    right_font_motor.writeMicroseconds(1500 + speed_val - u);
+  }
+  else
+  {
+    left_rear_motor.writeMicroseconds(1500 + speed_val - u);
+    right_font_motor.writeMicroseconds(1500 - speed_val - u);
+  }
+}
 
 
 /*******************SONAR FUNCTIONS**********************/
@@ -624,10 +653,7 @@ void stop() //Stop
 
 void forward()
 {
-  left_font_motor.writeMicroseconds(1500 + speed_val);
-  left_rear_motor.writeMicroseconds(1500 + speed_val);
-  right_rear_motor.writeMicroseconds(1500 - speed_val);
-  right_font_motor.writeMicroseconds(1500 - speed_val);
+  
 }
 
 void reverse ()
