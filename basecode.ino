@@ -45,6 +45,8 @@ Servo right_rear_motor;  // create servo object to control Vex Motor Controller 
 Servo right_font_motor;  // create servo object to control Vex Motor Controller 29
 
 int speed_val = 350;
+double speed_change;
+
 
 /***IRS***/
 //IR Equation Variables - MAY NEED TO UPDATE
@@ -64,6 +66,12 @@ double LR3power = -1.42;
 double MR1mm, MR2mm, LR1mm, LR3mm;
 double MR1mm_reading, MR2mm_reading, LR1mm_reading, LR3mm_reading;
 
+int MR1pin = A5;
+int MR2pin = A6;
+int LR1pin = A4;
+int LR3pin = A7;
+
+
 /***ULTRASONIC***/
 const int TRIG_PIN = 48;
 const int ECHO_PIN = 49;
@@ -71,6 +79,7 @@ const unsigned int MAX_DIST = 23200;
 
 double sonar_cm = 0;
 double cm = 0;
+int sonar_MA_n = 20;
 
 //Sonar Kalman
 double sensor_noise_sonar = 10;
@@ -87,6 +96,8 @@ double gyroZeroVoltage = 500;
 double gyroRate = 0;
 double gyroAngleChange = 0;
 double gyroAngle = 0;
+double gyro_average;
+double gyroTime;
 
 //Gyro Kalman
 double prev_val_gyro = 0;
@@ -95,8 +106,27 @@ double last_var_gyro = 999;
 double sensor_noise_gyro = 8;
 double process_noise_gyro = 1;
 
+
 /***SERVO***/
 Servo turret_motor;
+
+
+/***PHOTO TRANSISTORS***/
+double photo1, photo2, photo3, photo4;
+double photo_reading1, photo_reading2, photo_reading3, photo_reading4;
+bool photo_light1, photo_light2, photo_light3, photo_light4;
+
+//Pins
+int photo_pin1 = 40;
+int photo_pin2 = 41;
+int photo_pin3 = 42;
+int photo_pin4 = 43;
+
+//Thresholds for deciding if light exists
+double photo_thresh1 = 900;
+double photo_thresh2 = 900;
+double photo_thresh3 = 900;
+double photo_thresh4 = 900;
 
 
 void setup(void)
@@ -108,10 +138,16 @@ void setup(void)
   pinMode(LED_BUILTIN, OUTPUT);
 
   //Initialise IR sensor pins
-  pinMode(A4, INPUT);
-  pinMode(A5, INPUT);
-  pinMode(A6, INPUT);
-  pinMode(A7, INPUT);
+  pinMode(MR1pin, INPUT);
+  pinMode(MR2pin, INPUT);
+  pinMode(LR1pin, INPUT);
+  pinMode(LR3pin, INPUT);
+
+  //Initialise photo transistor sensor pins
+  pinMode(photo_pin1, INPUT);
+  pinMode(photo_pin2, INPUT);
+  pinMode(photo_pin3, INPUT);
+  pinMode(photo_pin4, INPUT);
 
   // The Trigger pin will tell the sensor to range find
   pinMode(TRIG_PIN, OUTPUT);
@@ -162,11 +198,14 @@ STATE initialising() {
   gyroZeroVoltage = sum1 / 200; // average the sum as the zero drifting
 
   SonarCheck(90); //Initialise sonar values
+  initialise_IR();
+  initialise_transistors();
 
   return RUNNING;
 }
 
 STATE running() {
+  update_transistors();
   return RUNNING;
 }
 
@@ -205,6 +244,57 @@ STATE stopped() {
   }
   return STOPPED;
 }
+
+
+/*******************GYRO FUNCTIONS**********************/
+void Gyro()
+{
+    // convert the 0-1023 signal to 0-5v
+    // BluetoothSerial.println("started gyro");
+    double gyro_reading = (analogRead(gyroPin));
+
+    gyroRate = (gyro_reading * 5.00) / 1023;
+
+    // find the voltage offset the value of voltage when gyro is zero (still)
+    gyroRate -= (gyroZeroVoltage * 5.00) / 1023;
+
+    // read out voltage divided the gyro sensitivity to calculate the angular velocity
+    double angularVelocity = (gyroRate / 0.007); // from Data Sheet, gyroSensitivity is 0.007 V/dps
+
+    gyro_average = (1 ? angularVelocity : KalmanGyro(angularVelocity));
+    // average_gyro(angularVelocity);
+
+    // if the angular velocity is less than the threshold, ignore it
+    if (gyro_average >= 2 || gyro_average <= -2)
+    {
+        gyroAngleChange = millis()-gyroTime;
+        gyroAngleChange = 1000 / gyroAngleChange;
+        gyroAngleChange = gyro_average/ gyroAngleChange;
+        gyroAngle += gyroAngleChange;   
+    }
+
+    gyroTime = millis();
+
+    // BluetoothSerial.print("Average ANGULAR VELOCITY");
+    // BluetoothSerial.println(gyro_average);
+    // BluetoothSerial.print("Gyro Angle:");
+    // BluetoothSerial.println(gyroAngle);
+    // BluetoothSerial.println("");
+}
+
+double KalmanGyro(double rawdata){   // Kalman Filter
+  double a_priori_est, a_post_est, a_priori_var, a_post_var, kalman_gain;
+
+  a_priori_var = last_var_gyro + process_noise_gyro; 
+
+  kalman_gain = a_priori_var/(a_priori_var+sensor_noise_gyro);
+  a_post_est = prev_val_gyro + kalman_gain*(rawdata-prev_val_gyro);
+  a_post_var = (1- kalman_gain)*a_priori_var;
+  last_var_gyro = a_post_var;
+  prev_val_gyro = a_post_est;
+  return a_post_est;
+}
+
 
 
 /*******************SONAR FUNCTIONS**********************/
@@ -301,7 +391,7 @@ double KalmanSonar(double rawdata){   // Kalman Filter
 }
 
 /*******************IR FUNCTIONS**********************/
-void initialise_sensors(){
+void initialise_IR(){
 double MR1sum, MR2sum, LR1sum, LR3sum;
 int iterations = 20;
 
@@ -327,10 +417,10 @@ double read_IR(double coefficient, double power, double sensor_reading){
 
 void read_IR_sensors(){
   // BluetoothSerial.println("READ SENSOR START");
-  MR1mm_reading = read_IR(MR1coeff, MR1power, analogRead(A5));
-  MR2mm_reading = read_IR(MR2coeff, MR2power, analogRead(A6));
-  LR1mm_reading = read_IR(LR1coeff, LR1power, analogRead(A4));
-  LR3mm_reading = read_IR(LR3coeff, LR3power, analogRead(A7));
+  MR1mm_reading = read_IR(MR1coeff, MR1power, analogRead(MR1pin));
+  MR2mm_reading = read_IR(MR2coeff, MR2power, analogRead(MR2pin));
+  LR1mm_reading = read_IR(LR1coeff, LR1power, analogRead(LR1pin));
+  LR3mm_reading = read_IR(LR3coeff, LR3power, analogRead(LR3pin));
 }
 
 void filter_IR_reading(){
@@ -343,66 +433,81 @@ void filter_IR_reading(){
   LR3mm = constrain(LR3mm_reading, LR3mm-lrbuffer, LR3mm+lrbuffer);
 }
 
-/*******************GYRO FUNCTIONS**********************/
-void Gyro()
-{
-    // convert the 0-1023 signal to 0-5v
-    // BluetoothSerial.println("started gyro");
-    double gyro_reading = (analogRead(gyroPin));
 
-    gyroRate = (gyro_reading * 5.00) / 1023;
-
-    // find the voltage offset the value of voltage when gyro is zero (still)
-    gyroRate -= (gyroZeroVoltage * 5.00) / 1023;
-
-    // read out voltage divided the gyro sensitivity to calculate the angular velocity
-    double angularVelocity = (gyroRate / 0.007); // from Data Sheet, gyroSensitivity is 0.007 V/dps
-
-    gyro_average = (1 ? angularVelocity : KalmanGyro(angularVelocity));
-    // average_gyro(angularVelocity);
-
-    // if the angular velocity is less than the threshold, ignore it
-    if (gyro_average >= 2 || gyro_average <= -2)
-    {
-        gyroAngleChange = millis()-gyroTime;
-        gyroAngleChange = 1000 / gyroAngleChange;
-        gyroAngleChange = gyro_average/ gyroAngleChange;
-        gyroAngle += gyroAngleChange;   
-    }
-
-    gyroTime = millis();
-
-    // BluetoothSerial.print("Average ANGULAR VELOCITY");
-    // BluetoothSerial.println(gyro_average);
-    // BluetoothSerial.print("Gyro Angle:");
-    // BluetoothSerial.println(gyroAngle);
-    // BluetoothSerial.println("");
+/*******************PHOTOTRANSISTOR FUNCTIONS**********************/
+void read_transistors(){
+  // BluetoothSerial.println("READ SENSOR START");
+  photo_reading1 = analogRead(photo_pin1);
+  photo_reading2 = analogRead(photo_pin2);
+  photo_reading3 = analogRead(photo_pin3);
+  photo_reading4 = analogRead(photo_pin4);
 }
 
-double average_gyro(double rawdata){
-  gyro_array[array_index] = KalmanGyro(rawdata);
-//   BluetoothSerial.print("KALMANED VALUE");
-//   BluetoothSerial.println(gyro_array[array_index]);
-  array_index++;
-  if (array_index == 20){
-    array_index = 0;
+void update_transistors(){ 
+  //Updates transistor state based on transistor readings
+  read_transistors();
+
+  //Filters transistor values
+  photo1 = photo_reading1;
+  photo2 = photo_reading2;
+  photo3 = photo_reading3;
+  photo4 = photo_reading4;
+
+  //Updates boolean light value based of transistor threshold
+  photo_light1 = transistor_on(photo1, photo_thresh1);
+  photo_light2 = transistor_on(photo2, photo_thresh2);
+  photo_light3 = transistor_on(photo3, photo_thresh3);
+  photo_light4 = transistor_on(photo4, photo_thresh4);
+  transistors_print();
+}
+
+bool transistor_on(double reading, double threshold){
+  bool status;
+  (reading >= threshold ? status = 0 : status = 1);
+  return status;
+}
+
+void transistors_print(){
+  BluetoothSerial.print("Photo transistor 1: ");
+  BluetoothSerial.print(photo1);
+  BluetoothSerial.print(" - STATUS -  ");
+  BluetoothSerial.println(photo_light1);
+
+  BluetoothSerial.print("Photo transistor2: ");
+  BluetoothSerial.print(photo2);
+  BluetoothSerial.print(" - STATUS -  ");
+  BluetoothSerial.println(photo_light2);
+
+  BluetoothSerial.print("Photo transistor3: ");
+  BluetoothSerial.print(photo3);
+  BluetoothSerial.print(" - STATUS -  ");
+  BluetoothSerial.println(photo_light3);
+
+  BluetoothSerial.print("Photo transistor4: ");
+  BluetoothSerial.print(photo4);
+  BluetoothSerial.print(" - STATUS -  ");
+  BluetoothSerial.println(photo_light4);
+  BluetoothSerial.println("");
+}
+
+void initialise_transistors(){
+double photo_sum1, photo_sum2, photo_sum3, photo_sum4;
+int iterations = 20;
+
+  for (int i = 0; i<=iterations; i++){
+    read_transistors();
+    photo_sum1 = photo_reading1;
+    photo_sum2 = photo_reading2;
+    photo_sum3 = photo_reading3;
+    photo_sum4 = photo_reading4;
+    delay(5);
   }
-  gyro_average = average_array(gyro_array, gyro_average, 20);
-  return gyro_average;
+  photo1 = photo_sum1/iterations;
+  photo2 = photo_sum2/iterations;
+  photo3 = photo_sum3/iterations;
+  photo4 = photo_sum4/iterations;
 }
 
-double KalmanGyro(double rawdata){   // Kalman Filter
-  double a_priori_est, a_post_est, a_priori_var, a_post_var, kalman_gain;
-
-  a_priori_var = last_var_gyro + process_noise_gyro; 
-
-  kalman_gain = a_priori_var/(a_priori_var+sensor_noise_gyro);
-  a_post_est = prev_val_gyro + kalman_gain*(rawdata-prev_val_gyro);
-  a_post_var = (1- kalman_gain)*a_priori_var;
-  last_var_gyro = a_post_var;
-  prev_val_gyro = a_post_est;
-  return a_post_est;
-}
 
 /*******************PROVIDED FUNCTIONS**********************/
 void fast_flash_double_LED_builtin()
@@ -457,24 +562,24 @@ boolean is_battery_voltage_OK()
 
   if (Lipo_level_cal > 0 && Lipo_level_cal < 160) {
     previous_millis = millis();
-    SerialCom->print("Lipo level:");
-    SerialCom->print(Lipo_level_cal);
-    SerialCom->print("%");
-    // SerialCom->print(" : Raw Lipo:");
-    // SerialCom->println(raw_lipo);
-    SerialCom->println("");
+    BluetoothSerial.print("Lipo level:");
+    BluetoothSerial.print(Lipo_level_cal);
+    BluetoothSerial.print("%");
+    // BluetoothSerial.print(" : Raw Lipo:");
+    // BluetoothSerial.println(raw_lipo);
+    BluetoothSerial.println("");
     Low_voltage_counter = 0;
     return true;
   } else {
     if (Lipo_level_cal < 0)
-      SerialCom->println("Lipo is Disconnected or Power Switch is turned OFF!!!");
+      BluetoothSerial.println("Lipo is Disconnected or Power Switch is turned OFF!!!");
     else if (Lipo_level_cal > 160)
-      SerialCom->println("!Lipo is Overchanged!!!");
+      BluetoothSerial.println("!Lipo is Overchanged!!!");
     else {
-      SerialCom->println("Lipo voltage too LOW, any lower and the lipo with be damaged");
-      SerialCom->print("Please Re-charge Lipo:");
-      SerialCom->print(Lipo_level_cal);
-      SerialCom->println("%");
+      BluetoothSerial.println("Lipo voltage too LOW, any lower and the lipo with be damaged");
+      BluetoothSerial.print("Please Re-charge Lipo:");
+      BluetoothSerial.print(Lipo_level_cal);
+      BluetoothSerial.println("%");
     }
 
     Low_voltage_counter++;

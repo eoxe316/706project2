@@ -14,6 +14,8 @@
 
 SoftwareSerial BluetoothSerial(BLUETOOTH_RX, BLUETOOTH_TX);
 
+int sensor_pin = A10;
+
 void setup(void)
 {
   BluetoothSerial.begin(115200);
@@ -23,7 +25,7 @@ void setup(void)
   pinMode(LED_BUILTIN, OUTPUT);
 
   //Initialise Sensor Pins
-  pinMode(A4, INPUT);
+  pinMode(sensor_pin, INPUT);
   delay(1000); //settling time but noT really needed
 }
 
@@ -31,8 +33,8 @@ void setup(void)
 /*******************SUPER LOOP**********************/
 void loop(void) //main loop
 {
-    BluetoothSerial.print("Pin reading:");
-    BluetoothSerial.println(analogRead(A4));
-    
-    BluetoothSerial.println("");
+  BluetoothSerial.print("Pin reading:");
+  BluetoothSerial.println(analogRead(sensor_pin));
+  BluetoothSerial.println("");
+  delay(1000);
 }
