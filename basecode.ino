@@ -117,10 +117,10 @@ double photo_reading1, photo_reading2, photo_reading3, photo_reading4;
 bool photo_light1, photo_light2, photo_light3, photo_light4;
 
 //Pins
-int photo_pin1 = 40;
-int photo_pin2 = 41;
-int photo_pin3 = 42;
-int photo_pin4 = 43;
+int photo_pin1 = A12;
+int photo_pin2 = A13;
+int photo_pin3 = A14;
+int photo_pin4 = A15;
 
 //Thresholds for deciding if light exists
 double photo_thresh1 = 900;
