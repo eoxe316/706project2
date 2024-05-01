@@ -21,6 +21,9 @@
 #define BOARD_WIDTH 150
 #define BOARD_LENGTH 1990
 
+//Other defines for other topics
+#define CONTROL_CONSTRAINT_GYRO 100
+
 SoftwareSerial BluetoothSerial(BLUETOOTH_RX, BLUETOOTH_TX);
 
 /*********STATE MACHINES************/
@@ -31,6 +34,15 @@ enum STATE {
   STOPPED
 };
 
+enum AVOID {
+  HAZARD_SPOT,
+  STRAFE,
+  APPROACHING_OBJECT,
+  PASSING_OBJECT,
+  AVOIDED
+};
+
+AVOID avoid_state = HAZARD_SPOT;
 
 /*******************COMPONENT SET-UP**********************/
 /***WHEEL MOTORS***/
@@ -99,6 +111,10 @@ double gyroAngle = 0;
 double gyro_average;
 double gyroTime;
 
+//Gyro Control Loop
+double ki_straight_gyro = 0;
+double ki_strafe_gyro = 0;
+
 //Gyro Kalman
 double prev_val_gyro = 0;
 double last_var_gyro = 999;
@@ -123,10 +139,10 @@ int photo_pin3 = A14;
 int photo_pin4 = A15;
 
 //Thresholds for deciding if light exists
-double photo_thresh1 = 900;
-double photo_thresh2 = 900;
-double photo_thresh3 = 900;
-double photo_thresh4 = 900;
+double photo_thresh1 = 1000;
+double photo_thresh2 = 1000;
+double photo_thresh3 = 1000;
+double photo_thresh4 = 1000;
 
 
 void setup(void)
@@ -206,6 +222,62 @@ STATE initialising() {
 
 STATE running() {
   update_transistors();
+  read_IR_sensors();
+  filter_IR_reading();
+
+  double kp_distance = 20;
+  double u_distance;
+  double obstacle_distance = 150;
+  double dodged_distance = 200;
+
+  switch(avoid_state){
+    case HAZARD_SPOT:
+      double e_distance = obstacle_distance - average_IR(LR1mm, LR3mm);
+      u_distance = constrain(kp_distance * e_distance, -speed_val, speed_val);
+      ClosedLoopStraight(u_distance);
+
+      if (e_distance < 20){
+        stop();
+        delay(1000);
+        avoid_state = STRAFE;
+      }
+    break;
+
+    case STRAFE:
+      //strafe until object is not straight ahead
+      ClosedLoopStrafe(200);
+
+      if(LR1mm >= dodged_distance && LR3mm >= dodged_distance){
+        stop();
+        delay(1000);
+        avoid_state = APPROACHING_OBJECT;
+      }
+
+    break;
+
+    case APPROACHING_OBJECT:
+      //Drive straight, checking that object has been passed (Not completely necessary but may be useful for later)
+      ClosedLoopStraight(300); //set speed to arbitary value for now
+      if(MR1mm <= obstacle_distance){
+        avoid_state = PASSING_OBJECT;
+      }
+    break;
+
+    case PASSING_OBJECT:
+      ClosedLoopStraight(300); //set speed to arbitary value for now
+
+      if(MR1mm >= dodged_distance){
+        stop();
+        delay(1000);
+        avoid_state = AVOIDED;
+      }
+    break;
+
+    case AVOIDED:
+      delay(100);
+    break;
+  };
+  
   return RUNNING;
 }
 
@@ -243,6 +315,48 @@ STATE stopped() {
 #endif
   }
   return STOPPED;
+}
+
+/*******************CONTROL LOOPS**********************/
+void ClosedLoopStraight(int speed_val)
+{
+    double e, correction_val;
+
+    double kp_gyro = 30;
+    double ki_gyro = 20;
+
+    (abs(gyroAngleChange) < 3) ? e = gyroAngleChange : e = 0;
+
+    double correction_val_1 = kp_gyro * e + ki_gyro * ki_straight_gyro;
+
+    correction_val = constrain(correction_val_1, -150, 150);
+
+    ki_straight_gyro += e;
+
+    left_font_motor.writeMicroseconds(1500 + speed_val - correction_val);
+    left_rear_motor.writeMicroseconds(1500 + speed_val - correction_val);
+    right_rear_motor.writeMicroseconds(1500 - speed_val - correction_val);
+    right_font_motor.writeMicroseconds(1500 - speed_val - correction_val);
+}
+
+void ClosedLoopStrafe(int speed_val)
+{
+    double e_gyro, e_ir, correction_val_gyro = 0, correction_val_ir = 0;
+    double kp_gyro = 25;
+    double ki_gyro = 5;
+
+    //double kp_ir = 0;
+    //double ki_ir = 0;
+    (abs(gyroAngleChange) < 3) ? e_gyro = gyroAngleChange : e_gyro = 0;
+
+    correction_val_gyro = constrain(kp_gyro * e_gyro + ki_gyro * ki_strafe_gyro, -CONTROL_CONSTRAINT_GYRO, CONTROL_CONSTRAINT_GYRO);
+    
+    ki_strafe_gyro += e_gyro;
+
+    left_font_motor.writeMicroseconds(1500 + speed_val - correction_val_gyro - correction_val_ir);
+    left_rear_motor.writeMicroseconds(1500 - speed_val - correction_val_gyro - correction_val_ir);
+    right_rear_motor.writeMicroseconds(1500 - speed_val - correction_val_gyro + correction_val_ir);
+    right_font_motor.writeMicroseconds(1500 + speed_val - correction_val_gyro + correction_val_ir);
 }
 
 
@@ -303,6 +417,7 @@ void Drive(int speed_val, bool strafe)
   float kp = 0;
   float ki = 0;
   float kd = 0;
+  float e, u;
 
   (gyroAngleChange > 3) ? e = 0 : e = gyroAngleChange;
 
@@ -462,6 +577,9 @@ void filter_IR_reading(){
   LR3mm = constrain(LR3mm_reading, LR3mm-lrbuffer, LR3mm+lrbuffer);
 }
 
+double average_IR(double IR1, double IR2) {
+  return (IR1 + IR2) / 2;
+}
 
 /*******************PHOTOTRANSISTOR FUNCTIONS**********************/
 void read_transistors(){
