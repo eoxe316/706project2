@@ -78,10 +78,10 @@ double LR3power = -1.42;
 double MR1mm, MR2mm, LR1mm, LR3mm;
 double MR1mm_reading, MR2mm_reading, LR1mm_reading, LR3mm_reading;
 
-int MR1pin = A5;
-int MR2pin = A6;
-int LR1pin = A4;
-int LR3pin = A7;
+int MR1pin = A4;
+int MR2pin = A7;
+int LR1pin = A5;
+int LR3pin = A6;
 
 
 /***ULTRASONIC***/
@@ -221,33 +221,47 @@ STATE initialising() {
 }
 
 STATE running() {
-  update_transistors();
+  // update_transistors();
   read_IR_sensors();
   filter_IR_reading();
 
   double kp_distance = 20;
   double u_distance;
-  double obstacle_distance = 150;
-  double dodged_distance = 200;
+  double obstacle_distance = 400;
+  double dodged_distance = 600;
+
+  BluetoothSerial.print("LR1: ");
+  BluetoothSerial.println(LR1mm);
+  BluetoothSerial.print("LR3: ");
+  BluetoothSerial.println(LR3mm);
+  BluetoothSerial.print("AVOID STATE");
+  BluetoothSerial.println(avoid_state);
+  BluetoothSerial.println("");
+
 
   switch(avoid_state){
     case HAZARD_SPOT:
-      double e_distance = obstacle_distance - average_IR(LR1mm, LR3mm);
+      BluetoothSerial.println("HUNTING FOR OBSTACLE");
+      double e_distance = average_IR(LR1mm, LR3mm) - obstacle_distance; 
       u_distance = constrain(kp_distance * e_distance, -speed_val, speed_val);
       ClosedLoopStraight(u_distance);
 
-      if (e_distance < 20){
+      if (LR1mm <= obstacle_distance || LR3mm <= obstacle_distance ){
         stop();
-        delay(1000);
-        avoid_state = STRAFE;
+        delay(500);
+        avoid_state = AVOID::STRAFE;
+        BluetoothSerial.println("OBJECT DETECTED");
+        delay(500);
       }
     break;
 
     case STRAFE:
       //strafe until object is not straight ahead
+      BluetoothSerial.println("STRAFING");
       ClosedLoopStrafe(200);
 
       if(LR1mm >= dodged_distance && LR3mm >= dodged_distance){
+        BluetoothSerial.println("OBJECT DODGED");
         stop();
         delay(1000);
         avoid_state = APPROACHING_OBJECT;
@@ -256,6 +270,7 @@ STATE running() {
     break;
 
     case APPROACHING_OBJECT:
+      BluetoothSerial.println("APPROACHING OBJECT");
       //Drive straight, checking that object has been passed (Not completely necessary but may be useful for later)
       ClosedLoopStraight(300); //set speed to arbitary value for now
       if(MR1mm <= obstacle_distance){
@@ -264,6 +279,7 @@ STATE running() {
     break;
 
     case PASSING_OBJECT:
+      BluetoothSerial.println("PASSING OBJECT");
       ClosedLoopStraight(300); //set speed to arbitary value for now
 
       if(MR1mm >= dodged_distance){
@@ -274,6 +290,7 @@ STATE running() {
     break;
 
     case AVOIDED:
+      BluetoothSerial.println("OBJECT AVOIDED");
       delay(100);
     break;
   };
@@ -571,10 +588,14 @@ void filter_IR_reading(){
   //Average these to final value 
   double mrbuffer = 150;
   double lrbuffer = 500;
-  MR1mm = constrain(MR1mm_reading, MR1mm-mrbuffer, MR1mm+mrbuffer);
-  MR2mm = constrain(MR2mm_reading, MR2mm-mrbuffer, MR2mm+mrbuffer);
-  LR1mm = constrain(LR1mm_reading, LR1mm-lrbuffer, LR1mm+lrbuffer);
-  LR3mm = constrain(LR3mm_reading, LR3mm-lrbuffer, LR3mm+lrbuffer);
+  // MR1mm = constrain(MR1mm_reading, MR1mm-mrbuffer, MR1mm+mrbuffer);
+  // MR2mm = constrain(MR2mm_reading, MR2mm-mrbuffer, MR2mm+mrbuffer);
+  // LR1mm = constrain(LR1mm_reading, LR1mm-lrbuffer, LR1mm+lrbuffer);
+  // LR3mm = constrain(LR3mm_reading, LR3mm-lrbuffer, LR3mm+lrbuffer);
+  MR1mm = MR1mm_reading;
+  MR2mm = MR2mm_reading;
+  LR1mm = LR1mm_reading;
+  LR3mm = LR3mm_reading;
 }
 
 double average_IR(double IR1, double IR2) {
