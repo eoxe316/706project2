@@ -36,7 +36,7 @@ enum STATE {
 
 /*********MOTION STATES**********/
 enum MOTION{
-    FORwARD,
+    FORWARD,
     STRAFE_LEFT,
     STRAFE_RIGHT
     //add more later
@@ -87,8 +87,8 @@ double MR1mm_reading, MR2mm_reading, LR1mm_reading, LR3mm_reading;
 
 int MR1pin = A5;
 int MR2pin = A6;
-int LR1pin = A4;
-int LR3pin = A7;
+int LR1pin = A5;
+int LR3pin = A6;
 
 
 /***ULTRASONIC***/
@@ -232,10 +232,6 @@ STATE running() {
   read_IR_sensors();
   filter_IR_reading();
 
-  double kp_distance = 20;
-  double u_distance;
-  double obstacle_distance = 150;
-  double dodged_distance = 200;
 
   move_forward();
   avoid();
@@ -282,31 +278,44 @@ STATE stopped() {
 
 /*******************BEHAVIOURAL CONTROL FUNCTIONS**********************/
 void move_forward(){
-    forward_command = FORwARD;
+    forward_command = FORWARD;
     forward_flag = true;
 }
 
 void avoid(){
-    while(1){
-        if(sonar_cm < 10){
-            if(LR1mm_reading < 300 && LR3mm_reading > 300){
-                avoid_flag = true;
-                avoid_command = STRAFE_RIGHT;
-            }else{
-                avoid_flag = true;
-                avoid_command = STRAFE_LEFT;
-            }
-        }else{
-            avoid_flag = false;
-        }
+    BluetoothSerial.print("sonar distance: ");
+    BluetoothSerial.println(sonar_cm);
+    // if(sonar_cm < 10){
+    //     if(LR1mm_reading < 300 && LR3mm_reading > 300){
+    //         avoid_flag = true;
+    //         avoid_command = STRAFE_RIGHT;
+    //     }else{
+    //         avoid_flag = true;
+    //         avoid_command = STRAFE_LEFT;
+    //     }
+    // }else{
+    //     avoid_flag = false;
+    // }
+
+    if(LR1mm_reading < 300 && LR3mm_reading > 300){
+        avoid_flag = true;
+        avoid_command = STRAFE_RIGHT;
+    }else if(LR1mm_reading > 300 && LR3mm_reading < 300){
+        avoid_flag = true;
+        avoid_command = STRAFE_LEFT;
+    }else if(LR1mm_reading < 300 && LR3mm_reading < 300){
+        avoid_flag = true;
+        avoid_command = STRAFE_RIGHT;        
+    }else{
+        avoid_flag = false;
     }
 }
 
 void arbitrate(){
-    if(forward_flag = 1){
+    if(forward_flag == true){
         motor_input = forward_command;
     }
-    if(avoid_flag = 1){
+    if(avoid_flag == true){
         motor_input = avoid_command;
     }
     robot_move();
