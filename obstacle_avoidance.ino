@@ -335,12 +335,16 @@ void robot_move(){
             while (millis() < time + timeset)
             {
               ClosedLoopStrafe(-300);
+              delay(10);
+              Gyro();
             }
             break;
         case STRAFE_RIGHT:
             while (millis() < time + timeset)
             {
               ClosedLoopStrafe(300);
+              delay(10);
+              Gyro();
             }
             break;
     }
