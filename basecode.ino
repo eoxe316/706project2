@@ -34,15 +34,32 @@ enum STATE {
   STOPPED
 };
 
-enum AVOID {
-  HAZARD_SPOT,
-  STRAFE,
-  APPROACHING_OBJECT,
-  PASSING_OBJECT,
-  AVOIDED
+/*********MOTION STATES**********/
+enum MOTION{
+    FORWARD,
+    STRAFE_LEFT,
+    STRAFE_RIGHT
+    //add more later
 };
 
-AVOID avoid_state = HAZARD_SPOT;
+enum SERVO_MOTION{
+    LIGHT_FORWARD,
+    LIGHT_LEFT,
+    LIGHT_RIGHT
+    //Dunno if this should be seperate but just bear with me
+};
+
+/*********FUNCTION FLAGS AND OUTPUTS*********/
+MOTION forward_command;
+bool forward_flag;
+
+MOTION avoid_command;
+bool avoid_flag;
+bool light_flag;
+
+MOTION motor_input;
+SERVO_MOTION servo_input;
+SERVO_MOTION light_command;
 
 /*******************COMPONENT SET-UP**********************/
 /***WHEEL MOTORS***/
@@ -78,8 +95,8 @@ double LR3power = -1.42;
 double MR1mm, MR2mm, LR1mm, LR3mm;
 double MR1mm_reading, MR2mm_reading, LR1mm_reading, LR3mm_reading;
 
-int MR1pin = A4;
-int MR2pin = A7;
+int MR1pin = A5;
+int MR2pin = A6;
 int LR1pin = A5;
 int LR3pin = A6;
 
@@ -114,6 +131,7 @@ double gyroTime;
 //Gyro Control Loop
 double ki_straight_gyro = 0;
 double ki_strafe_gyro = 0;
+double ki_integral_angle = 0;
 
 //Gyro Kalman
 double prev_val_gyro = 0;
@@ -143,6 +161,9 @@ double photo_thresh1 = 1000;
 double photo_thresh2 = 1000;
 double photo_thresh3 = 1000;
 double photo_thresh4 = 1000;
+
+//Light angle variables
+double light_angle;
 
 
 void setup(void)
@@ -217,83 +238,21 @@ STATE initialising() {
   initialise_IR();
   initialise_transistors();
 
+  //Locate the light before beginning
+  locate_light();
+
   return RUNNING;
 }
 
 STATE running() {
-  // update_transistors();
+  update_transistors();
   read_IR_sensors();
   filter_IR_reading();
 
-  double kp_distance = 20;
-  double u_distance;
-  double obstacle_distance = 400;
-  double dodged_distance = 600;
 
-  BluetoothSerial.print("LR1: ");
-  BluetoothSerial.println(LR1mm);
-  BluetoothSerial.print("LR3: ");
-  BluetoothSerial.println(LR3mm);
-  BluetoothSerial.print("AVOID STATE");
-  BluetoothSerial.println(avoid_state);
-  BluetoothSerial.println("");
-
-
-  switch(avoid_state){
-    case HAZARD_SPOT:
-      BluetoothSerial.println("HUNTING FOR OBSTACLE");
-      double e_distance = average_IR(LR1mm, LR3mm) - obstacle_distance; 
-      u_distance = constrain(kp_distance * e_distance, -speed_val, speed_val);
-      ClosedLoopStraight(u_distance);
-
-      if (LR1mm <= obstacle_distance || LR3mm <= obstacle_distance ){
-        stop();
-        delay(500);
-        avoid_state = AVOID::STRAFE;
-        BluetoothSerial.println("OBJECT DETECTED");
-        delay(500);
-      }
-    break;
-
-    case STRAFE:
-      //strafe until object is not straight ahead
-      BluetoothSerial.println("STRAFING");
-      ClosedLoopStrafe(200);
-
-      if(LR1mm >= dodged_distance && LR3mm >= dodged_distance){
-        BluetoothSerial.println("OBJECT DODGED");
-        stop();
-        delay(1000);
-        avoid_state = APPROACHING_OBJECT;
-      }
-
-    break;
-
-    case APPROACHING_OBJECT:
-      BluetoothSerial.println("APPROACHING OBJECT");
-      //Drive straight, checking that object has been passed (Not completely necessary but may be useful for later)
-      ClosedLoopStraight(300); //set speed to arbitary value for now
-      if(MR1mm <= obstacle_distance){
-        avoid_state = PASSING_OBJECT;
-      }
-    break;
-
-    case PASSING_OBJECT:
-      BluetoothSerial.println("PASSING OBJECT");
-      ClosedLoopStraight(300); //set speed to arbitary value for now
-
-      if(MR1mm >= dodged_distance){
-        stop();
-        delay(1000);
-        avoid_state = AVOIDED;
-      }
-    break;
-
-    case AVOIDED:
-      BluetoothSerial.println("OBJECT AVOIDED");
-      delay(100);
-    break;
-  };
+  move_forward();
+  avoid();
+  arbitrate();
   
   return RUNNING;
 }
@@ -333,6 +292,126 @@ STATE stopped() {
   }
   return STOPPED;
 }
+
+/*******************BEHAVIOURAL CONTROL FUNCTIONS**********************/
+void move_forward(){
+    forward_command = FORWARD;
+    forward_flag = true;
+}
+
+void avoid(){
+    BluetoothSerial.print("sonar distance: ");
+    BluetoothSerial.println(sonar_cm);
+    // if(sonar_cm < 10){
+    //     if(LR1mm_reading < 300 && LR3mm_reading > 300){
+    //         avoid_flag = true;
+    //         avoid_command = STRAFE_RIGHT;
+    //     }else{
+    //         avoid_flag = true;
+    //         avoid_command = STRAFE_LEFT;
+    //     }
+    // }else{
+    //     avoid_flag = false;
+    // }
+
+    if(LR1mm_reading < 300 && LR3mm_reading > 300){
+        avoid_flag = true;
+        avoid_command = STRAFE_RIGHT;
+    }else if(LR1mm_reading > 300 && LR3mm_reading < 300){
+        avoid_flag = true;
+        avoid_command = STRAFE_LEFT;
+    }else if(LR1mm_reading < 300 && LR3mm_reading < 300){
+        avoid_flag = true;
+        avoid_command = STRAFE_RIGHT;        
+    }else{
+        avoid_flag = false;
+    }
+}
+
+void turntolight(){
+  //This function turns towards the light while in the running function
+  //Find the light again if it has been found before and has been lost due to strafe
+  bool facing_light;
+  (photo_light1 + photo_light2 + photo_light3 + photo_light4 >= 3) ? facing_light = 1 : facing_light = 0;
+  if(!facing_light && avoid_command == STRAFE_RIGHT){ 
+    //If last strafe was to the right, light is probably to the left of robot
+    light_flag = true;
+    light_command = LIGHT_LEFT;
+  }
+  if(!facing_light && avoid_command == STRAFE_LEFT){
+    //If last strafe was left, light is to the right of the robot
+    light_flag = true;
+    light_command = LIGHT_RIGHT;
+  }
+  else{ 
+    //at this point assume is a misread, but later on we can fix this logic
+    light_flag = false;
+  }
+}
+
+
+void arbitrate(){
+    if(forward_flag == true){
+        motor_input = forward_command;
+    }
+    if(avoid_flag == true){
+        motor_input = avoid_command;
+    }
+    if(light_flag == true){
+        servo_input = light_command;
+    }
+    robot_move();
+}
+
+void robot_move(){
+    switch (motor_input){
+        case FORWARD:
+            ClosedLoopStraight(300);
+            break;
+        case STRAFE_LEFT:
+            ClosedLoopStrafe(-300);
+            break;
+        case STRAFE_RIGHT:
+            ClosedLoopStrafe(300);
+            break;
+    }
+
+    switch(servo_input){
+      case LIGHT_LEFT:
+        light_angle = light_angle - 5;
+        turret_motor.write(light_angle);
+
+        break;
+      case LIGHT_RIGHT:
+        light_angle =light_angle + 5;
+        turret_motor.write(light_angle);
+
+        break;
+      case LIGHT_FORWARD:
+        turret_motor.write(light_angle);
+
+        break;
+    }
+}
+
+void locate_light(){
+  //This function initially finds where the light is
+  //Turn servo at angles until light is detected
+  for (int i = 0; i <= 180; i+10){
+    turret_motor.write(i);
+    delay(100);
+    update_transistors();
+    //Check if at least 3 transistors read the light
+    if(photo_light1 + photo_light2 + photo_light3 + photo_light4 >= 3){
+      light_angle = i - 90;
+      break;
+    }
+  }
+  BluetoothSerial.print("LIGHT DETECTED AT ANGLE ");
+  BluetoothSerial.println(light_angle);
+}
+
+
 
 /*******************CONTROL LOOPS**********************/
 void ClosedLoopStraight(int speed_val)
@@ -375,6 +454,32 @@ void ClosedLoopStrafe(int speed_val)
     right_rear_motor.writeMicroseconds(1500 - speed_val - correction_val_gyro + correction_val_ir);
     right_font_motor.writeMicroseconds(1500 + speed_val - correction_val_gyro + correction_val_ir);
 }
+
+double ClosedLoopTurn(double speed, double target_angle)
+{
+  double e, correction_val;
+  double kp_angle = 6;
+  double ki_angle = 0;
+
+  e = target_angle-gyroAngle;
+
+  correction_val = constrain(kp_angle * e + ki_angle * ki_integral_angle, -speed, speed);
+
+  ki_integral_angle += e;
+
+  left_font_motor.writeMicroseconds(1500 + correction_val);
+  left_rear_motor.writeMicroseconds(1500 + correction_val);
+  right_rear_motor.writeMicroseconds(1500 + correction_val);
+  right_font_motor.writeMicroseconds(1500 + correction_val);
+
+  BluetoothSerial.print("Current Error: ");
+  BluetoothSerial.println(e);
+  BluetoothSerial.print("Gyro aim: ");
+  BluetoothSerial.println(target_angle);
+  return e;
+}
+
+
 
 
 /*******************GYRO FUNCTIONS**********************/
@@ -588,14 +693,10 @@ void filter_IR_reading(){
   //Average these to final value 
   double mrbuffer = 150;
   double lrbuffer = 500;
-  // MR1mm = constrain(MR1mm_reading, MR1mm-mrbuffer, MR1mm+mrbuffer);
-  // MR2mm = constrain(MR2mm_reading, MR2mm-mrbuffer, MR2mm+mrbuffer);
-  // LR1mm = constrain(LR1mm_reading, LR1mm-lrbuffer, LR1mm+lrbuffer);
-  // LR3mm = constrain(LR3mm_reading, LR3mm-lrbuffer, LR3mm+lrbuffer);
-  MR1mm = MR1mm_reading;
-  MR2mm = MR2mm_reading;
-  LR1mm = LR1mm_reading;
-  LR3mm = LR3mm_reading;
+  MR1mm = constrain(MR1mm_reading, MR1mm-mrbuffer, MR1mm+mrbuffer);
+  MR2mm = constrain(MR2mm_reading, MR2mm-mrbuffer, MR2mm+mrbuffer);
+  LR1mm = constrain(LR1mm_reading, LR1mm-lrbuffer, LR1mm+lrbuffer);
+  LR3mm = constrain(LR3mm_reading, LR3mm-lrbuffer, LR3mm+lrbuffer);
 }
 
 double average_IR(double IR1, double IR2) {
@@ -675,7 +776,6 @@ int iterations = 20;
   photo3 = photo_sum3/iterations;
   photo4 = photo_sum4/iterations;
 }
-
 
 /*******************PROVIDED FUNCTIONS**********************/
 void fast_flash_double_LED_builtin()
