@@ -321,19 +321,27 @@ void arbitrate(){
     robot_move();
 }
 
+double time = 0;
+
+double timeset = 1000;
+
 void robot_move(){
     switch (motor_input){
         case FORWARD:
             ClosedLoopStraight(300);
-            delay(1000);
+            time = millis();
             break;
         case STRAFE_LEFT:
-            ClosedLoopStrafe(-300);
-            delay(1000);
+            while (millis() < time + timeset)
+            {
+              ClosedLoopStrafe(-300);
+            }
             break;
         case STRAFE_RIGHT:
-            ClosedLoopStrafe(300);
-            delay(1000);
+            while (millis() < time + timeset)
+            {
+              ClosedLoopStrafe(300);
+            }
             break;
     }
 }
@@ -833,4 +841,12 @@ void strafe_right ()
   left_rear_motor.writeMicroseconds(1500 - speed_val);
   right_rear_motor.writeMicroseconds(1500 - speed_val);
   right_font_motor.writeMicroseconds(1500 + speed_val);
+}
+
+float currentServoAngle = 0;
+
+void ServoLight()
+{
+
+
 }
