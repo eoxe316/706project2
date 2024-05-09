@@ -263,7 +263,7 @@ STATE running() {
 }
 
 #define TURRET_MAX_TURN 10
-float currentAngle = 180;
+float currentAngle = 90;
 
 void PhototransisterFollow()
 {
@@ -271,7 +271,8 @@ void PhototransisterFollow()
 
   currentAngle += constrain(k * ((photo_pin1 + photo_pin2) - (photo_pin2 + photo_pin3)), -TURRET_MAX_TURN, TURRET_MAX_TURN);
 
-  turret_motor.write(currentAngle);
+
+  turret_motor.write(constrain(currentAngle, 0, 180));
 
 }
 
