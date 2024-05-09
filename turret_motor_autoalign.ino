@@ -263,7 +263,7 @@ STATE running() {
 }
 
 // variables to control light follow function
-#define TURRET_MAX_TURN 10
+#define TURRET_MAX_TURN 45
 // Sets initial angle to straight
 float currentAngle = 90;
 
@@ -272,8 +272,11 @@ void PhototransisterFollow()
     // Proportional gain
     float k = 0.1;
 
+    // Gets the change in angle required to balance the photo transistors
+    float photo_diff = constrain(k * ((photo_pin1 + photo_pin2) - (photo_pin2 + photo_pin3)), -TURRET_MAX_TURN, TURRET_MAX_TURN);
+
     // Changes the current angle to move the angle depending on what sensors are faced towards the light
-    currentAngle = constrain(currentAngle + k * ((photo_pin1 + photo_pin2) - (photo_pin2 + photo_pin3)), 0, 180);
+    currentAngle = constrain(currentAngle + photo_diff, 0, 180);
 
     // Changes turret angle
     turret_motor.write(currentAngle);
