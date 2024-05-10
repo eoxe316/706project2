@@ -288,52 +288,54 @@ void move_forward(){
 }
 
 void avoid(){
-    BluetoothSerial.print("sonar distance: ");
-    BluetoothSerial.println(sonar_cm);
+    // Going right
+    if((LR1mm_reading < 100) || (LR1mm_reading > 100 && sonar_cm < 10 && LR3mm_reading)){
+      avoid_flag = true;
+      avoid_command = STRAFE_RIGHT;
 
-    if(LR1mm_reading < 300 && LR3mm_reading > 300){
-        avoid_flag = true;
-        avoid_command = STRAFE_RIGHT;
-    }else if(LR1mm_reading > 300 && LR3mm_reading < 300){
-        avoid_flag = true;
-        avoid_command = STRAFE_LEFT;
-    }else if(LR1mm_reading < 300 && LR3mm_reading < 300){
-        avoid_flag = true;
-        avoid_command = STRAFE_RIGHT;        
+    // Going left
+    }else if(LR3mm_reading < 100){
+      avoid_flag = true;
+      avoid_command = STRAFE_LEFT;
+
+    //else do nothing
     }else{
-        avoid_flag = false;
+      avoid_flag = false;
     }
 }
 
 void escape(){
-    // if((sonar_cm < 10) && (MR2mm_reading < 300)){
-    //     escape_flag = true;
-    //     escape_command = TURN_90_CCW;
-    // }else if((sonar_cm < 10) && (MR1mm_reading < 300)){
-    //     escape_flag = true;
-    //     escape_command = TURN_90_CW;
-    // }else{
-    //     escape_flag = false;
-    // }
-    if((LR1mm_reading < 300 && LR3mm_reading < 300) && MR2mm_reading < 300){
+    if((sonar_cm < 10) && (LR3mm_reading < 100) && (MR2mm_reading < 300)){
         escape_flag = true;
         escape_command = TURN_90_CCW;
-    }else if((LR1mm_reading < 300 && LR3mm_reading < 300) && (MR1mm_reading < 300)){
+    }else if((sonar_cm < 10) && (LR1mm_reading < 100) && (MR1mm_reading < 300)){
         escape_flag = true;
         escape_command = TURN_90_CW;
     }else{
         escape_flag = false;
     }
+    // if((LR1mm_reading < 300 && LR3mm_reading < 300) && MR2mm_reading < 300){
+    //     escape_flag = true;
+    //     escape_command = TURN_90_CCW;
+    // }else if((LR1mm_reading < 300 && LR3mm_reading < 300) && (MR1mm_reading < 300)){
+    //     escape_flag = true;
+    //     escape_command = TURN_90_CW;
+    // }else{
+    //     escape_flag = false;
+    // }
 }
 
 void arbitrate(){
     if(forward_flag == true){
+        BluetoothSerial.println("going forward");
         motor_input = forward_command;
     }
     if(avoid_flag == true){
+        BluetoothSerial.println("Avoiding you");
         motor_input = avoid_command;
     }
     if(escape_flag == true){
+        BluetoothSerial.println("escaping from your grasp");
         motor_input = escape_command;
     }
     robot_move();
