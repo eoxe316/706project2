@@ -175,6 +175,7 @@ void setup(void)
   pinMode(LED_BUILTIN, OUTPUT);
 
   turret_motor.attach(8);
+  turret_motor.write(90);
 
   //Initialise IR sensor pins
   pinMode(MR1pin, INPUT);
