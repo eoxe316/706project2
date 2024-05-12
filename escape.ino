@@ -39,9 +39,17 @@ enum MOTION{
     FORWARD,
     STRAFE_LEFT,
     STRAFE_RIGHT,
-    TURN_90_CCW,
-    TURN_90_CW
+    TURN_180
     //add more later
+};
+
+/*********IR BINARY************/
+enum IR_BINARY{
+  LR3,
+  LR1,
+  MR2,
+  MR1,
+  SONAR
 };
 
 /*********FUNCTION FLAGS AND OUTPUTS*********/
@@ -94,6 +102,11 @@ int MR1pin = A5;
 int MR2pin = A6;
 int LR1pin = A5;
 int LR3pin = A6;
+
+//IR Binary
+
+//sonar, MR1, MR2, LR1, LR3
+unsigned int sensor_bin = 0b00000;
 
 
 /***ULTRASONIC***/
@@ -205,6 +218,7 @@ void loop(void) //main loop
         break;
     };
     Sonar();
+    conv_binary(SONAR, sonar_cm);
     Gyro();
     delay(10);
 }
@@ -288,41 +302,18 @@ void move_forward(){
 }
 
 void avoid(){
-    // Going right
-    if((LR1mm_reading < 100) || (LR1mm_reading > 100 && sonar_cm < 10 && LR3mm_reading)){
-      avoid_flag = true;
-      avoid_command = STRAFE_RIGHT;
-
-    // Going left
-    }else if(LR3mm_reading < 100){
-      avoid_flag = true;
-      avoid_command = STRAFE_LEFT;
-
-    //else do nothing
-    }else{
-      avoid_flag = false;
-    }
-}
-
-void escape(){
-    if((sonar_cm < 10) && (LR3mm_reading < 100) && (MR2mm_reading < 300)){
-        escape_flag = true;
-        escape_command = TURN_90_CCW;
-    }else if((sonar_cm < 10) && (LR1mm_reading < 100) && (MR1mm_reading < 300)){
-        escape_flag = true;
-        escape_command = TURN_90_CW;
-    }else{
-        escape_flag = false;
-    }
-    // if((LR1mm_reading < 300 && LR3mm_reading < 300) && MR2mm_reading < 300){
-    //     escape_flag = true;
-    //     escape_command = TURN_90_CCW;
-    // }else if((LR1mm_reading < 300 && LR3mm_reading < 300) && (MR1mm_reading < 300)){
-    //     escape_flag = true;
-    //     escape_command = TURN_90_CW;
-    // }else{
-    //     escape_flag = false;
-    // }
+  if(~check_bits(LR1) && ~check_bits(LR3) && ~check_bits(SONAR)){
+    avoid_flag = false;
+  }else if(check_bits(MR1) && check_bits(MR2)){
+    avoid_flag = true;
+    avoid_command = TURN_180;
+  }else if(check_bits(MR1) || (~check_bits(MR2) && check_bits(LR1))){
+    avoid_flag = true;
+    avoid_command = STRAFE_RIGHT;
+  }else{
+    avoid_flag = true;
+    avoid_command = STRAFE_LEFT;
+  }
 }
 
 void arbitrate(){
@@ -333,10 +324,6 @@ void arbitrate(){
     if(avoid_flag == true){
         BluetoothSerial.println("Avoiding you");
         motor_input = avoid_command;
-    }
-    if(escape_flag == true){
-        BluetoothSerial.println("escaping from your grasp");
-        motor_input = escape_command;
     }
     robot_move();
 }
@@ -356,12 +343,10 @@ void robot_move(){
             ClosedLoopStrafe(300);
             delay(1000);
             break;
-        case TURN_90_CCW:
+        case TURN_180:
             ccw();
-            delay(1000);            //might need to make a closed loop turn function? maybe not
-        case TURN_90_CW:
-            cw();
-            delay(1000);
+            delay(2000);            //might need to make a closed loop turn function? maybe not
+            break;
     }
 }
 
@@ -623,6 +608,11 @@ void filter_IR_reading(){
   MR2mm = constrain(MR2mm_reading, MR2mm-mrbuffer, MR2mm+mrbuffer);
   LR1mm = constrain(LR1mm_reading, LR1mm-lrbuffer, LR1mm+lrbuffer);
   LR3mm = constrain(LR3mm_reading, LR3mm-lrbuffer, LR3mm+lrbuffer);
+
+  conv_binary(MR1, MR1mm);
+  conv_binary(MR2, MR2mm);
+  conv_binary(LR1, LR1mm);
+  conv_binary(LR3, LR3mm);
 }
 
 double average_IR(double IR1, double IR2) {
@@ -701,6 +691,37 @@ int iterations = 20;
   photo2 = photo_sum2/iterations;
   photo3 = photo_sum3/iterations;
   photo4 = photo_sum4/iterations;
+}
+
+/********************HELPER FUNCS***************************/
+void conv_binary(IR_BINARY binary_type, int reading){
+  //check if its sonar and the sonar is under 10cm
+  if(binary_type == SONAR){
+    if(reading < 10){
+      IR_bin |= (1 << SONAR);   //flip sonar bit
+    }else{
+      IR_bin |= (0 << SONAR);   //else flip it back
+    }
+  //else if its an IR
+  }else if(reading < 300){
+    IR_bin |= (1 << binary_type);   //flip its respective bit
+  }else{
+  //else if not under
+    IR_bin |= (0 << binary_type);
+  }
+}
+
+bool check_bits(int pos) {
+    // Create a mask with a 1 at the specified position and 0 in all other positions
+    unsigned int mask = 1 << pos;
+    
+    // Use bitwise AND to check if the bit at the specified position is set
+    // If the result is non-zero, the bit is set; otherwise, it's not set
+    if (sensor_bin & mask) {
+        return 1; // Bit is set (1)
+    } else {
+        return 0; // Bit is not set (0)
+    }
 }
 
 /*******************PROVIDED FUNCTIONS**********************/
