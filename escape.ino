@@ -98,15 +98,15 @@ double LR3power = -1.42;
 double MR1mm, MR2mm, LR1mm, LR3mm;
 double MR1mm_reading, MR2mm_reading, LR1mm_reading, LR3mm_reading;
 
-int MR1pin = A5;
-int MR2pin = A6;
+int MR1pin = A4;
+int MR2pin = A7;
 int LR1pin = A5;
 int LR3pin = A6;
 
 //IR Binary
 
 //sonar, MR1, MR2, LR1, LR3
-unsigned int sensor_bin = 0b00000;
+unsigned int IR_bin = 0b00000;
 
 
 /***ULTRASONIC***/
@@ -302,12 +302,15 @@ void move_forward(){
 }
 
 void avoid(){
-  if(~check_bits(LR1) && ~check_bits(LR3) && ~check_bits(SONAR)){
+  BluetoothSerial.println(IR_bin);
+
+  if(!check_bits(LR1) && !check_bits(LR3) && !check_bits(SONAR)){
+    BluetoothSerial.println("NO AVOID REQUIRED");
     avoid_flag = false;
   }else if(check_bits(MR1) && check_bits(MR2)){
     avoid_flag = true;
     avoid_command = TURN_180;
-  }else if(check_bits(MR1) || (~check_bits(MR2) && check_bits(LR1))){
+  }else if(check_bits(MR1) || (!check_bits(MR2) && check_bits(LR1))){
     avoid_flag = true;
     avoid_command = STRAFE_RIGHT;
   }else{
@@ -333,19 +336,15 @@ void robot_move(){
     switch (motor_input){
         case FORWARD:
             ClosedLoopStraight(300);
-            delay(1000);
             break;
         case STRAFE_LEFT:
             ClosedLoopStrafe(-300);
-            delay(1000);
             break;
         case STRAFE_RIGHT:
             ClosedLoopStrafe(300);
-            delay(1000);
             break;
         case TURN_180:
-            ccw();
-            delay(2000);            //might need to make a closed loop turn function? maybe not
+            ccw();          //might need to make a closed loop turn function? maybe not
             break;
     }
 }
@@ -613,10 +612,26 @@ void filter_IR_reading(){
   conv_binary(MR2, MR2mm);
   conv_binary(LR1, LR1mm);
   conv_binary(LR3, LR3mm);
+  print_IR();
 }
 
 double average_IR(double IR1, double IR2) {
   return (IR1 + IR2) / 2;
+}
+
+void print_IR(){
+  BluetoothSerial.print("MR1: ");
+  BluetoothSerial.println(MR1mm_reading);
+
+  BluetoothSerial.print("MR2: ");
+  BluetoothSerial.println(MR2mm_reading);
+
+  // BluetoothSerial.print("LR1: ");
+  // BluetoothSerial.println(LR1mm_reading);
+
+  // BluetoothSerial.print("LR3: ");
+  // BluetoothSerial.println(LR3mm_reading);
+  BluetoothSerial.println("");
 }
 
 /*******************PHOTOTRANSISTOR FUNCTIONS**********************/
@@ -643,7 +658,7 @@ void update_transistors(){
   photo_light2 = transistor_on(photo2, photo_thresh2);
   photo_light3 = transistor_on(photo3, photo_thresh3);
   photo_light4 = transistor_on(photo4, photo_thresh4);
-  transistors_print();
+  // transistors_print();
 }
 
 bool transistor_on(double reading, double threshold){
@@ -702,26 +717,41 @@ void conv_binary(IR_BINARY binary_type, int reading){
     }else{
       IR_bin |= (0 << SONAR);   //else flip it back
     }
-  //else if its an IR
-  }else if(reading < 300){
+  //else if its an LR
+  }else if(binary_type == LR1 || binary_type == LR3){
+    if (reading < 300){
+      IR_bin |= (1 << binary_type);   //flip its respective bit
+    }else{
+    //else if not under
+    IR_bin |= (0 << binary_type);
+    }
+  }
+  //else if MR
+  else if(reading < 100){
     IR_bin |= (1 << binary_type);   //flip its respective bit
-  }else{
-  //else if not under
+    }else{
+    //else if not under
     IR_bin |= (0 << binary_type);
   }
+
 }
 
 bool check_bits(int pos) {
-    // Create a mask with a 1 at the specified position and 0 in all other positions
-    unsigned int mask = 1 << pos;
+    // // Create a mask with a 1 at the specified position and 0 in all other positions
+    // unsigned int mask = 1 << pos;
     
-    // Use bitwise AND to check if the bit at the specified position is set
-    // If the result is non-zero, the bit is set; otherwise, it's not set
-    if (sensor_bin & mask) {
-        return 1; // Bit is set (1)
-    } else {
-        return 0; // Bit is not set (0)
-    }
+    // // Use bitwise AND to check if the bit at the specified position is set
+    // // If the result is non-zero, the bit is set; otherwise, it's not set
+    // if (IR_bin & mask) {
+    //     return 1; // Bit is set (1)
+    // } else {
+    //     return 0; // Bit is not set (0)
+    // }
+    BluetoothSerial.print("BIT POS");
+    BluetoothSerial.print(pos);
+    BluetoothSerial.print(" READING ");
+    BluetoothSerial.println(bitRead(IR_bin, pos));
+    return(bitRead(IR_bin, pos));
 }
 
 /*******************PROVIDED FUNCTIONS**********************/
@@ -839,7 +869,10 @@ void stop() //Stop
 
 void forward()
 {
-  
+  left_font_motor.writeMicroseconds(1500 + speed_val);
+  left_rear_motor.writeMicroseconds(1500 + speed_val);
+  right_rear_motor.writeMicroseconds(1500 - speed_val);
+  right_font_motor.writeMicroseconds(1500 - speed_val);
 }
 
 void reverse ()
