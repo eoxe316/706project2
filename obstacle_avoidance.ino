@@ -38,8 +38,18 @@ enum STATE {
 enum MOTION{
     FORWARD,
     STRAFE_LEFT,
-    STRAFE_RIGHT
+    STRAFE_RIGHT,
+    TURN_180
     //add more later
+};
+
+/*********IR BINARY************/
+enum IR_BINARY{
+  LR3,
+  LR1,
+  MR2,
+  MR1,
+  SONAR
 };
 
 /*********FUNCTION FLAGS AND OUTPUTS*********/
@@ -48,6 +58,9 @@ bool forward_flag;
 
 MOTION avoid_command;
 bool avoid_flag;
+
+MOTION escape_command;
+bool escape_flag;
 
 MOTION motor_input;
 
@@ -69,26 +82,34 @@ double speed_change;
 
 /***IRS***/
 //IR Equation Variables - MAY NEED TO UPDATE
-double MR1coeff = 19.000;
-double MR1power = -0.94;
+double MR1coeff = 13.400;
+double MR1power = -0.91;
 
-double MR2coeff = 20.000;
-double MR2power = -0.97;
+double MR2coeff = 12.800;
+double MR2power = -0.89;
 
-double LR1coeff = 325.000;
-double LR1power = -1.33;
+double LR1coeff = 145.500;
+double LR1power = -1.2;
 
-double LR3coeff = 540.000;
-double LR3power = -1.42;
+double LR3coeff = 178.000;
+double LR3power = -1.25;
 
 //IR Sensor working variables
 double MR1mm, MR2mm, LR1mm, LR3mm;
 double MR1mm_reading, MR2mm_reading, LR1mm_reading, LR3mm_reading;
 
-int MR1pin = A5;
-int MR2pin = A6;
+int MR1pin = A4;
+int MR2pin = A7;
 int LR1pin = A5;
 int LR3pin = A6;
+
+//IR Binary
+unsigned int IR_bin = 0b00000;
+
+//IR Kalman
+double MR1_var, MR2_var, LR1_var, LR3_var = 0;
+double sensor_noise_ir = 8;
+double process_noise_ir = 1;
 
 
 /***ULTRASONIC***/
@@ -124,14 +145,15 @@ double ki_strafe_gyro = 0;
 
 //Gyro Kalman
 double prev_val_gyro = 0;
-double last_var_gyro = 999;
+double last_var_gyro = 0;
 
 double sensor_noise_gyro = 8;
 double process_noise_gyro = 1;
 
 
-/***SERVO***/
+/***SERVO AND FAN***/
 Servo turret_motor;
+int fan_pin = 21;
 
 
 /***PHOTO TRANSISTORS***/
@@ -180,6 +202,15 @@ void setup(void)
   pinMode(gyroPin, INPUT);
   pinMode(A14, INPUT);
 
+  //Initialise and set turret motor to 0 position
+  // turret_motor.attach(8);
+  // turret_motor.write(90);
+
+  //Initialise fan pin
+  pinMode(fan_pin, OUTPUT);
+  //Turn fan on for testing
+  // digitalWrite(fan_pin, HIGH);
+
   delay(1000); //settling time but noT really needed
 }
 
@@ -200,6 +231,7 @@ void loop(void) //main loop
         break;
     };
     Sonar();
+    conv_binary(SONAR, sonar_cm);
     Gyro();
     delay(10);
 }
@@ -283,69 +315,55 @@ void move_forward(){
 }
 
 void avoid(){
-    BluetoothSerial.print("sonar distance: ");
-    BluetoothSerial.println(sonar_cm);
-    // if(sonar_cm < 10){
-    //     if(LR1mm_reading < 300 && LR3mm_reading > 300){
-    //         avoid_flag = true;
-    //         avoid_command = STRAFE_RIGHT;
-    //     }else{
-    //         avoid_flag = true;
-    //         avoid_command = STRAFE_LEFT;
-    //     }
-    // }else{
-    //     avoid_flag = false;
-    // }
+  BluetoothSerial.println(IR_bin);
+  // for (int i = 0; i <= 4; i++){
+  //   BluetoothSerial.print("BIT POS");
+  //   BluetoothSerial.print(i);
+  //   BluetoothSerial.print(" READING ");
+  //   BluetoothSerial.println(bitRead(IR_bin, i));
+  // }
 
-    if(LR1mm_reading < 300 && LR3mm_reading > 300){
-        avoid_flag = true;
-        avoid_command = STRAFE_RIGHT;
-    }else if(LR1mm_reading > 300 && LR3mm_reading < 300){
-        avoid_flag = true;
-        avoid_command = STRAFE_LEFT;
-    }else if(LR1mm_reading < 300 && LR3mm_reading < 300){
-        avoid_flag = true;
-        avoid_command = STRAFE_RIGHT;        
-    }else{
-        avoid_flag = false;
-    }
+  if(!check_bits(LR1) && !check_bits(LR3) && !check_bits(SONAR)){
+    BluetoothSerial.println("NO AVOID REQUIRED");
+    avoid_flag = false;
+  }else if(check_bits(MR1) && check_bits(MR2)){
+    avoid_flag = true;
+    avoid_command = TURN_180;
+  }else if(check_bits(MR1) || (!check_bits(MR2) && check_bits(LR1))){
+    avoid_flag = true;
+    avoid_command = STRAFE_RIGHT;
+  }else{
+    avoid_flag = true;
+    avoid_command = STRAFE_LEFT;
+  }
 }
 
 void arbitrate(){
     if(forward_flag == true){
+        BluetoothSerial.println("going forward");
         motor_input = forward_command;
     }
     if(avoid_flag == true){
+        BluetoothSerial.println("Avoiding you");
         motor_input = avoid_command;
     }
     robot_move();
 }
 
-double time = 0;
-
-double timeset = 1000;
-
+//SOMEONE CHANGE THESE DELAYS
 void robot_move(){
     switch (motor_input){
         case FORWARD:
             ClosedLoopStraight(300);
-            time = millis();
             break;
         case STRAFE_LEFT:
-            while (millis() < time + timeset)
-            {
-              ClosedLoopStrafe(-300);
-              delay(10);
-              Gyro();
-            }
+            ClosedLoopStrafe(-300);
             break;
         case STRAFE_RIGHT:
-            while (millis() < time + timeset)
-            {
-              ClosedLoopStrafe(300);
-              delay(10);
-              Gyro();
-            }
+            ClosedLoopStrafe(300);
+            break;
+        case TURN_180:
+            ccw();          //might need to make a closed loop turn function? maybe not
             break;
     }
 }
@@ -584,11 +602,13 @@ int iterations = 20;
   MR2mm = MR2sum/iterations;
   LR1mm = LR1sum/iterations;
   LR3mm = LR3sum/iterations;
+  print_IR();
 }
 
 double read_IR(double coefficient, double power, double sensor_reading){
   double sensor_mm;
   sensor_mm = coefficient *1000*(pow(sensor_reading, power));
+  sensor_mm = constrain(sensor_mm, 0, 1000);
   return sensor_mm;
 }
 
@@ -604,14 +624,56 @@ void filter_IR_reading(){
   //Average these to final value 
   double mrbuffer = 150;
   double lrbuffer = 500;
-  MR1mm = constrain(MR1mm_reading, MR1mm-mrbuffer, MR1mm+mrbuffer);
-  MR2mm = constrain(MR2mm_reading, MR2mm-mrbuffer, MR2mm+mrbuffer);
-  LR1mm = constrain(LR1mm_reading, LR1mm-lrbuffer, LR1mm+lrbuffer);
-  LR3mm = constrain(LR3mm_reading, LR3mm-lrbuffer, LR3mm+lrbuffer);
+  print_IR();
+  MR1mm, MR1_var = Kalman_IR(MR1mm_reading, MR1mm, MR1_var);
+  MR2mm, MR2_var = Kalman_IR(MR2mm_reading, MR2mm, MR2_var);
+  LR1mm, LR1_var = Kalman_IR(LR1mm_reading, LR1mm, LR1_var);
+  LR3mm, LR3_var = Kalman_IR(LR3mm_reading, LR3mm, LR3_var);
+
+  conv_binary(MR1, MR1mm_reading);
+  conv_binary(MR2, MR2mm_reading);
+  conv_binary(LR1, LR1mm_reading);
+  conv_binary(LR3, LR3mm_reading);
+  print_IR();
 }
 
 double average_IR(double IR1, double IR2) {
   return (IR1 + IR2) / 2;
+}
+
+double Kalman_IR(double rawdata, double prev_val_ir, double last_var_ir){   // Kalman Filter
+  double a_priori_est, a_post_est, a_priori_var, a_post_var, kalman_gain;
+
+  a_priori_var = last_var_ir + process_noise_ir; 
+
+  kalman_gain = a_priori_var/(a_priori_var+sensor_noise_ir);
+  a_post_est = prev_val_ir + kalman_gain*(rawdata-prev_val_ir);
+  a_post_var = (1- kalman_gain)*a_priori_var;
+
+  return a_post_est, a_post_var;
+}
+
+void print_IR(){
+  BluetoothSerial.print("MR1 RAW: ");
+  BluetoothSerial.print(MR1mm_reading);
+  BluetoothSerial.print(" MR1: ");
+  BluetoothSerial.println(MR1mm);
+
+  BluetoothSerial.print("MR2 RAW: ");
+  BluetoothSerial.print(MR2mm_reading);
+  BluetoothSerial.print("MR2: ");
+  BluetoothSerial.println(MR2mm);
+
+  BluetoothSerial.print("LR1 RAW: ");
+  BluetoothSerial.print(LR1mm_reading);
+  BluetoothSerial.print("LR1: ");
+  BluetoothSerial.println(LR1mm);
+
+  BluetoothSerial.print("LR3 RAW: ");
+  BluetoothSerial.print(LR3mm_reading);
+  BluetoothSerial.print("LR3: ");
+  BluetoothSerial.println(LR3mm);
+  BluetoothSerial.println("");
 }
 
 /*******************PHOTOTRANSISTOR FUNCTIONS**********************/
@@ -638,7 +700,7 @@ void update_transistors(){
   photo_light2 = transistor_on(photo2, photo_thresh2);
   photo_light3 = transistor_on(photo3, photo_thresh3);
   photo_light4 = transistor_on(photo4, photo_thresh4);
-  transistors_print();
+  // transistors_print();
 }
 
 bool transistor_on(double reading, double threshold){
@@ -686,6 +748,45 @@ int iterations = 20;
   photo2 = photo_sum2/iterations;
   photo3 = photo_sum3/iterations;
   photo4 = photo_sum4/iterations;
+}
+
+/********************HELPER FUNCS***************************/
+void conv_binary(IR_BINARY binary_type, double reading){
+  //Default to MR threshold
+  double threshold = 150;
+  //If no MR change to other relevaant threshold
+  if(binary_type == SONAR){
+    threshold = 20;
+  }
+  else if(binary_type == LR1 || binary_type == LR3){
+    threshold = 300;
+  }
+  else if(binary_type == MR2){
+    threshold = 100;
+  }
+
+  if(reading <= threshold){
+    IR_bin |= (1 << binary_type);   //flip its respective bit
+  }
+  else{
+    //else if not under
+    IR_bin &= ~(1 << binary_type);
+  }
+  
+}
+
+bool check_bits(int pos) {
+  // // Create a mask with a 1 at the specified position and 0 in all other positions
+  // unsigned int mask = 1 << pos;
+  
+  // // Use bitwise AND to check if the bit at the specified position is set
+  // // If the result is non-zero, the bit is set; otherwise, it's not set
+  // if (IR_bin & mask) {
+  //     return 1; // Bit is set (1)
+  // } else {
+  //     return 0; // Bit is not set (0)
+  // }
+  return(bitRead(IR_bin, pos));
 }
 
 /*******************PROVIDED FUNCTIONS**********************/
@@ -803,7 +904,10 @@ void stop() //Stop
 
 void forward()
 {
-  
+  left_font_motor.writeMicroseconds(1500 + speed_val);
+  left_rear_motor.writeMicroseconds(1500 + speed_val);
+  right_rear_motor.writeMicroseconds(1500 - speed_val);
+  right_font_motor.writeMicroseconds(1500 - speed_val);
 }
 
 void reverse ()
@@ -845,12 +949,4 @@ void strafe_right ()
   left_rear_motor.writeMicroseconds(1500 - speed_val);
   right_rear_motor.writeMicroseconds(1500 - speed_val);
   right_font_motor.writeMicroseconds(1500 + speed_val);
-}
-
-float currentServoAngle = 0;
-
-void ServoLight()
-{
-
-
 }
