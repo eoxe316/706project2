@@ -165,6 +165,8 @@ double photo_thresh4 = 1000;
 //Light angle variables
 double light_angle;
 
+// double photo1[2][15] = {10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150; 0.097560976, 151.85, 564.6944444, 740.8857143, 827.8461538, 878.0526316, 909.21875, 927.9512195, 941.2121212, 950.3142857, 955.9210526, 962.4864865, 966.6388889, 970.7179487, 973.7777778}
+
 
 void setup(void)
 {
@@ -252,7 +254,7 @@ STATE running() {
   read_IR_sensors();
   filter_IR_reading();
 
-  PhototransisterFollow();
+  Sunflower();
 
 
 //   move_forward();
@@ -264,23 +266,30 @@ STATE running() {
 }
 
 // variables to control light follow function
-#define TURRET_MAX_TURN 45
+#define TURRET_MAX_TURN 10
 // Sets initial angle to straight
 float currentAngle = 90;
+float photo_average = 0;
 
-void PhototransisterFollow()
+void Sunflower()
 {
     // Proportional gain
-    float k = 0.1;
+    float k = 0.005;
 
     // Gets the change in angle required to balance the photo transistors
-    float photo_diff = constrain(k * ((photo_pin1 + photo_pin2) - (photo_pin2 + photo_pin3)), -TURRET_MAX_TURN, TURRET_MAX_TURN);
+    float photo_diff = (photo1 + photo2) - (photo3 + photo4);
+
+    photo_average = (photo_diff + (2 * photo_average)) / 3;
+
 
     // Changes the current angle to move the angle depending on what sensors are faced towards the light
-    currentAngle = constrain(currentAngle + photo_diff, 0, 180);
+    if (abs(photo_diff) < (2 * abs(photo_average))) { currentAngle = constrain(currentAngle - (k * photo_diff), 0, 180); }
 
     // Changes turret angle
     turret_motor.write(currentAngle);
+
+    BluetoothSerial.println(photo_diff);
+    BluetoothSerial.println(photo_average);
 
 }
 
@@ -738,15 +747,25 @@ void read_transistors(){
   photo_reading4 = analogRead(photo_pin4);
 }
 
+// double Poly(double x, double p4, double p3, double p2, double p1, double p0)
+// {
+//   return (p4 * pow(x,4)) + (p3 * pow(x,3)) + (p2 * pow(x,2)) + (p1 * (x)) + p0;
+// }
+
 void update_transistors(){ 
   //Updates transistor state based on transistor readings
   read_transistors();
 
   //Filters transistor values
+  // photo1 = Poly(photo_reading1, -0.000008, 0.0037, -0.659, 50.851, -501.98);
+  // photo2 = Poly(photo_reading2, -0.000004, 0.0023, -0.5042, 45.173, -477.75);
+  // photo3 = Poly(photo_reading3, -0.00001, 0.0051, -0.8126, 56.867, -535.26);
+  // photo4 = Poly(photo_reading4, -0.000001, 0.0016, -0.4128, 41.197, -460.74);
+
   photo1 = photo_reading1;
-  photo2 = photo_reading2;
-  photo3 = photo_reading3;
-  photo4 = photo_reading4;
+  photo2 = 1.02 * photo_reading2;
+  photo3 = 0.93 * photo_reading3;
+  photo4 = 0.92 * photo_reading4;
 
   //Updates boolean light value based of transistor threshold
   photo_light1 = transistor_on(photo1, photo_thresh1);
