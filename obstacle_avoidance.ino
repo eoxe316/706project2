@@ -625,15 +625,15 @@ void filter_IR_reading(){
   double mrbuffer = 150;
   double lrbuffer = 500;
   print_IR();
-  MR1mm, MR1_var = Kalman_IR(MR1mm_reading, MR1mm, MR1_var);
-  MR2mm, MR2_var = Kalman_IR(MR2mm_reading, MR2mm, MR2_var);
-  LR1mm, LR1_var = Kalman_IR(LR1mm_reading, LR1mm, LR1_var);
-  LR3mm, LR3_var = Kalman_IR(LR3mm_reading, LR3mm, LR3_var);
+  MR1mm = Kalman_IR(MR1mm_reading, MR1mm, &MR1_var);
+  MR2mm = Kalman_IR(MR2mm_reading, MR2mm, &MR2_var);
+  LR1mm = Kalman_IR(LR1mm_reading, LR1mm, &LR1_var);
+  LR3mm = Kalman_IR(LR3mm_reading, LR3mm, &LR3_var);
 
-  conv_binary(MR1, MR1mm_reading);
-  conv_binary(MR2, MR2mm_reading);
-  conv_binary(LR1, LR1mm_reading);
-  conv_binary(LR3, LR3mm_reading);
+  conv_binary(MR1, MR1mm);
+  conv_binary(MR2, MR2mm);
+  conv_binary(LR1, LR1mm);
+  conv_binary(LR3, LR3mm);
   print_IR();
 }
 
@@ -641,16 +641,17 @@ double average_IR(double IR1, double IR2) {
   return (IR1 + IR2) / 2;
 }
 
-double Kalman_IR(double rawdata, double prev_val_ir, double last_var_ir){   // Kalman Filter
+double Kalman_IR(double rawdata, double prev_val_ir, double* last_var_ir){   // Kalman Filter
   double a_priori_est, a_post_est, a_priori_var, a_post_var, kalman_gain;
 
-  a_priori_var = last_var_ir + process_noise_ir; 
+  a_priori_var = *last_var_ir + process_noise_ir; 
 
   kalman_gain = a_priori_var/(a_priori_var+sensor_noise_ir);
   a_post_est = prev_val_ir + kalman_gain*(rawdata-prev_val_ir);
   a_post_var = (1- kalman_gain)*a_priori_var;
+  *last_var_ir = a_post_var;
 
-  return a_post_est, a_post_var;
+  return a_post_est;
 }
 
 void print_IR(){
