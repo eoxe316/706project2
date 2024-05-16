@@ -82,17 +82,17 @@ double speed_change;
 
 /***IRS***/
 //IR Equation Variables - MAY NEED TO UPDATE
-double MR1coeff = 13.400;
-double MR1power = -0.91;
+double MR1coeff = 2.54;
+double MR1power = -1.06;
 
-double MR2coeff = 12.800;
-double MR2power = -0.89;
+double MR2coeff = 3.80;
+double MR2power = -1.26;
 
-double LR1coeff = 145.500;
-double LR1power = -1.2;
+double LR1coeff = 5.03;
+double LR1power = -1.00;
 
-double LR3coeff = 178.000;
-double LR3power = -1.25;
+double LR3coeff = 4.04;
+double LR3power = -0.93;
 
 //IR Sensor working variables
 double MR1mm, MR2mm, LR1mm, LR3mm;
@@ -267,7 +267,7 @@ STATE running() {
 
   move_forward();
   avoid();
-  arbitrate();
+  // arbitrate();
   
   return RUNNING;
 }
@@ -608,23 +608,21 @@ int iterations = 20;
 double read_IR(double coefficient, double power, double sensor_reading){
   double sensor_mm;
   sensor_mm = coefficient *1000*(pow(sensor_reading, power));
-  sensor_mm = constrain(sensor_mm, 0, 1000);
   return sensor_mm;
 }
 
 void read_IR_sensors(){
   // BluetoothSerial.println("READ SENSOR START");
-  MR1mm_reading = read_IR(MR1coeff, MR1power, analogRead(MR1pin));
-  MR2mm_reading = read_IR(MR2coeff, MR2power, analogRead(MR2pin));
-  LR1mm_reading = read_IR(LR1coeff, LR1power, analogRead(LR1pin));
-  LR3mm_reading = read_IR(LR3coeff, LR3power, analogRead(LR3pin));
+  MR1mm_reading = constrain(read_IR(MR1coeff, MR1power, analogRead(MR1pin)), 0, 25);
+  MR2mm_reading = constrain(read_IR(MR2coeff, MR2power, analogRead(MR2pin)), 0, 25);
+  LR1mm_reading = constrain(read_IR(LR1coeff, LR1power, analogRead(LR1pin)), 0, 40);
+  LR3mm_reading = constrain(read_IR(LR3coeff, LR3power, analogRead(LR3pin)), 0, 40);
 }
 
 void filter_IR_reading(){
   //Average these to final value 
   double mrbuffer = 150;
   double lrbuffer = 500;
-  print_IR();
   MR1mm = Kalman_IR(MR1mm_reading, MR1mm, &MR1_var);
   MR2mm = Kalman_IR(MR2mm_reading, MR2mm, &MR2_var);
   LR1mm = Kalman_IR(LR1mm_reading, LR1mm, &LR1_var);
