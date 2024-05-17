@@ -30,6 +30,7 @@ SoftwareSerial BluetoothSerial(BLUETOOTH_RX, BLUETOOTH_TX);
 //Main state machine
 enum STATE {
   INITIALISING,
+  MOTHING,
   RUNNING,
   STOPPED
 };
@@ -211,6 +212,9 @@ void loop(void) //main loop
       case INITIALISING:
         machine_state = initialising();
         break;
+      case MOTHING:
+        machine_state = Mothing();
+        break;
       case RUNNING:
         machine_state = running();
         break;
@@ -220,8 +224,15 @@ void loop(void) //main loop
     };
     Sonar();
     Gyro();
-    delay(10);
+    // delay(10);
 }
+
+
+// variables to control light follow function
+#define TURRET_MAX_TURN 10
+// Sets initial angle to straight
+float currentAngle = 90;
+float photo_average = 0;
 
 STATE initialising() {
   BluetoothSerial.println("INITIALISING....");
@@ -244,17 +255,79 @@ STATE initialising() {
   initialise_transistors();
 
   //Locate the light before beginning
-  locate_light();
+  // locate_light();
 
-  return RUNNING;
+  turret_motor.write(0);
+  currentAngle = 0;
+
+  return MOTHING;
+}
+
+float photo1_avg;
+float photo2_avg;
+float photo3_avg;
+float photo4_avg;
+
+STATE Mothing()
+{
+  avgphototrans();
+
+  float f1 = photo1_avg + photo2_avg;
+  float f2 = photo3_avg + photo4_avg;
+
+  if ((f1 - f2) < 0)
+  {
+    BluetoothSerial.println("Found Light");
+
+    return RUNNING;
+  }
+
+  if (currentAngle <= 180) { currentAngle += 5; }
+  turret_motor.write(currentAngle);
+
+  BluetoothSerial.println("MOTHING");
+  BluetoothSerial.println(currentAngle);
+  BluetoothSerial.println(f1 - f2);
+  
+
+  return MOTHING;
+}
+
+void avgphototrans()
+{
+  update_transistors();
+
+  photo1_avg = photo1;
+  photo2_avg = photo2;
+  photo3_avg = photo3;
+  photo4_avg = photo4;
+
+  for (int i = 0; i < 10; i++)
+  {
+    update_transistors();
+
+    delay(5);
+
+    photo1_avg += photo1;
+    photo2_avg += photo2;
+    photo3_avg += photo3;
+    photo4_avg += photo4;
+  }
+
+  photo1_avg = photo1_avg / 10;
+  photo2_avg = photo2_avg / 10;
+  photo3_avg = photo3_avg / 10;
+  photo4_avg = photo4_avg / 10;
+
 }
 
 STATE running() {
-  update_transistors();
+  avgphototrans();
   read_IR_sensors();
   filter_IR_reading();
 
   Sunflower();
+  ClosedLoopStraight(200);
 
 
 //   move_forward();
@@ -265,19 +338,13 @@ STATE running() {
   return RUNNING;
 }
 
-// variables to control light follow function
-#define TURRET_MAX_TURN 10
-// Sets initial angle to straight
-float currentAngle = 90;
-float photo_average = 0;
-
 void Sunflower()
 {
     // Proportional gain
-    float k = 0.005;
+    float k = 0.05;
 
     // Gets the change in angle required to balance the photo transistors
-    float photo_diff = (photo1 + photo2) - (photo3 + photo4);
+    float photo_diff = (photo1_avg + photo2_avg) - (photo3_avg + photo4_avg);
 
     photo_average = (photo_diff + (2 * photo_average)) / 3;
 
@@ -288,8 +355,8 @@ void Sunflower()
     // Changes turret angle
     turret_motor.write(currentAngle);
 
-    BluetoothSerial.println(photo_diff);
-    BluetoothSerial.println(photo_average);
+    // BluetoothSerial.println(photo_diff);
+    // BluetoothSerial.println(photo_average);
 
 }
 
@@ -446,21 +513,19 @@ void locate_light(){
   BluetoothSerial.println(light_angle);
 }
 
-
-
 /*******************CONTROL LOOPS**********************/
 void ClosedLoopStraight(int speed_val)
 {
     double e, correction_val;
 
     double kp_gyro = 30;
-    double ki_gyro = 20;
+    double ki_gyro = 1;
 
-    (abs(gyroAngleChange) < 3) ? e = gyroAngleChange : e = 0;
+    e = -(currentAngle - 90);
 
     double correction_val_1 = kp_gyro * e + ki_gyro * ki_straight_gyro;
 
-    correction_val = constrain(correction_val_1, -150, 150);
+    correction_val = constrain(correction_val_1, -300, 300);
 
     ki_straight_gyro += e;
 
@@ -772,7 +837,7 @@ void update_transistors(){
   photo_light2 = transistor_on(photo2, photo_thresh2);
   photo_light3 = transistor_on(photo3, photo_thresh3);
   photo_light4 = transistor_on(photo4, photo_thresh4);
-  transistors_print();
+  // transistors_print();
 }
 
 bool transistor_on(double reading, double threshold){
@@ -933,11 +998,6 @@ void stop() //Stop
   left_rear_motor.writeMicroseconds(1500);
   right_rear_motor.writeMicroseconds(1500);
   right_font_motor.writeMicroseconds(1500);
-}
-
-void forward()
-{
-  
 }
 
 void reverse ()
