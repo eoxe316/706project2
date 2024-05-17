@@ -81,7 +81,7 @@ double speed_change;
 
 
 /***IRS***/
-//IR Equation Variables - MAY NEED TO UPDATE
+//IR Equation Variables
 double MR1coeff = 2.54;
 double MR1power = -1.06;
 
@@ -267,7 +267,7 @@ STATE running() {
 
   move_forward();
   avoid();
-  // arbitrate();
+  arbitrate();
   
   return RUNNING;
 }
@@ -316,12 +316,12 @@ void move_forward(){
 
 void avoid(){
   BluetoothSerial.println(IR_bin);
-  // for (int i = 0; i <= 4; i++){
-  //   BluetoothSerial.print("BIT POS");
-  //   BluetoothSerial.print(i);
-  //   BluetoothSerial.print(" READING ");
-  //   BluetoothSerial.println(bitRead(IR_bin, i));
-  // }
+  for (int i = 0; i <= 4; i++){
+    BluetoothSerial.print("BIT POS");
+    BluetoothSerial.print(i);
+    BluetoothSerial.print(" READING ");
+    BluetoothSerial.println(bitRead(IR_bin, i));
+  }
 
   if(!check_bits(LR1) && !check_bits(LR3) && !check_bits(SONAR)){
     BluetoothSerial.println("NO AVOID REQUIRED");
@@ -357,10 +357,12 @@ void robot_move(){
             ClosedLoopStraight(300);
             break;
         case STRAFE_LEFT:
-            ClosedLoopStrafe(-300);
+            // ClosedLoopStrafe(-300);
+            ccw();
             break;
         case STRAFE_RIGHT:
-            ClosedLoopStrafe(300);
+            // ClosedLoopStrafe(300);
+            cw();
             break;
         case TURN_180:
             ccw();          //might need to make a closed loop turn function? maybe not
@@ -653,25 +655,35 @@ double Kalman_IR(double rawdata, double prev_val_ir, double* last_var_ir){   // 
 }
 
 void print_IR(){
-  BluetoothSerial.print("MR1 RAW: ");
-  BluetoothSerial.print(MR1mm_reading);
-  BluetoothSerial.print(" MR1: ");
-  BluetoothSerial.println(MR1mm);
 
-  BluetoothSerial.print("MR2 RAW: ");
-  BluetoothSerial.print(MR2mm_reading);
-  BluetoothSerial.print("MR2: ");
-  BluetoothSerial.println(MR2mm);
+  // BluetoothSerial.print("LR3 RAW: ");
+  // BluetoothSerial.print(LR3mm_reading);
+  BluetoothSerial.print("LR3: ");
+  BluetoothSerial.println(LR3mm);
 
-  BluetoothSerial.print("LR1 RAW: ");
-  BluetoothSerial.print(LR1mm_reading);
+  // BluetoothSerial.print("LR1 RAW: ");
+  // BluetoothSerial.print(LR1mm_reading);
   BluetoothSerial.print("LR1: ");
   BluetoothSerial.println(LR1mm);
 
-  BluetoothSerial.print("LR3 RAW: ");
-  BluetoothSerial.print(LR3mm_reading);
-  BluetoothSerial.print("LR3: ");
-  BluetoothSerial.println(LR3mm);
+  // BluetoothSerial.print("MR2 RAW: ");
+  // BluetoothSerial.print(MR2mm_reading);
+  BluetoothSerial.print("MR2: ");
+  BluetoothSerial.println(MR2mm);
+
+  // BluetoothSerial.print("MR1 RAW: ");
+  // BluetoothSerial.print(MR1mm_reading);
+  BluetoothSerial.print(" MR1: ");
+  BluetoothSerial.println(MR1mm);
+
+
+
+
+
+
+
+  BluetoothSerial.print("Sonar ");
+  BluetoothSerial.println(sonar_cm);
   BluetoothSerial.println("");
 }
 
@@ -752,16 +764,16 @@ int iterations = 20;
 /********************HELPER FUNCS***************************/
 void conv_binary(IR_BINARY binary_type, double reading){
   //Default to MR threshold
-  double threshold = 150;
+  double threshold = 10;
   //If no MR change to other relevaant threshold
   if(binary_type == SONAR){
-    threshold = 20;
+    threshold = 25;
   }
   else if(binary_type == LR1 || binary_type == LR3){
-    threshold = 300;
+    threshold = 20;
   }
   else if(binary_type == MR2){
-    threshold = 100;
+    threshold = 10;
   }
 
   if(reading <= threshold){
