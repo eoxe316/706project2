@@ -344,15 +344,26 @@ void Sunflower()
     float k = 0.05;
 
     // Gets the change in angle required to balance the photo transistors
-    float photo_diff = (photo1_avg + photo2_avg) - (photo3_avg + photo4_avg);
+    float photo_diff = (photo1_avg + photo2_avg) - (photo3_avg + photo4_avg); //we want this to effectively be 0
 
     photo_average = (photo_diff + (2 * photo_average)) / 3;
 
 
     // Changes the current angle to move the angle depending on what sensors are faced towards the light
-    if (abs(photo_diff) < (2 * abs(photo_average))) { currentAngle = constrain(currentAngle - (k * photo_diff), 0, 180); }
+    //so if photo diff brought down the average
+    if (abs(photo_diff) < (abs(photo_average)*2)) { currentAngle = constrain(currentAngle - (k * photo_diff), 0, 180); }
 
     // Changes turret angle
+    BluetoothSerial.print("Photo diff: ");
+    BluetoothSerial.println(photo_diff);
+    BluetoothSerial.print("Photo ave: ");
+    BluetoothSerial.println(photo_average);
+    BluetoothSerial.print("ANGLE REQUESTED: ");
+    BluetoothSerial.println(currentAngle);
+    BluetoothSerial.println("");
+
+    // (1) ? currentAngle = currentAngle : currentAngle = KalmanAngle(currentAngle);
+
     turret_motor.write(currentAngle);
 
     // BluetoothSerial.println(photo_diff);
@@ -518,10 +529,12 @@ void ClosedLoopStraight(int speed_val)
 {
     double e, correction_val;
 
-    double kp_gyro = 30;
-    double ki_gyro = 1;
+    double kp_gyro = 20;
+    double ki_gyro = 0;
 
-    e = -(currentAngle - 90);
+    e = (currentAngle - 90);
+
+    (abs(e)<20)? e=0 : e=e;
 
     double correction_val_1 = kp_gyro * e + ki_gyro * ki_straight_gyro;
 
