@@ -570,21 +570,16 @@ double SonarCheck(double angle_in)
 }
 
 double KalmanSonar(double rawdata){   // Kalman Filter
-  if (rawdata < 20){ //If the value is absolutely outrageous, ignore it and use the last recorded value
-    return sonar_cm;
-  }
-  else{
-    rawdata = constrain(rawdata, sonar_cm - 20, sonar_cm + 20);
-    double a_post_est, a_priori_var, a_post_var, kalman_gain;
+  rawdata = constrain(rawdata, sonar_cm - 20, sonar_cm + 20);
+  double a_post_est, a_priori_var, a_post_var, kalman_gain;
 
-    a_priori_var = sonar_variance + process_noise_sonar; 
+  a_priori_var = sonar_variance + process_noise_sonar; 
 
-    kalman_gain = a_priori_var/(a_priori_var+sensor_noise_sonar);
-    a_post_est = sonar_cm + kalman_gain*(rawdata-sonar_cm);
-    sonar_variance = (1 * kalman_gain)*a_priori_var;
-    sonar_cm = rawdata;
-    return a_post_est;
-  }   
+  kalman_gain = a_priori_var/(a_priori_var+sensor_noise_sonar);
+  a_post_est = sonar_cm + kalman_gain*(rawdata-sonar_cm);
+  sonar_variance = (1 * kalman_gain)*a_priori_var;
+  sonar_cm = rawdata;
+  return a_post_est; 
 }
 
 /*******************IR FUNCTIONS**********************/
@@ -769,8 +764,11 @@ void conv_binary(IR_BINARY binary_type, double reading){
   if(binary_type == SONAR){
     threshold = 25;
   }
-  else if(binary_type == LR1 || binary_type == LR3){
+  else if (binary_type == LR3){
     threshold = 20;
+  }
+  else if(binary_type == LR1){
+    threshold = 15;
   }
   else if(binary_type == MR2){
     threshold = 10;
