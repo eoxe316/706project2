@@ -359,7 +359,7 @@ void Sunflower()
 
     // Changes the current angle to move the angle depending on what sensors are faced towards the light
     //so if photo diff brought down the average
-    if (abs(1 - photo_diff) > (0.10)) {currentAngle = constrain(currentAngle - (k * (photo_diff-1.1)), 0, 180); }
+    if (abs(1 - photo_diff) > (0.10)) {currentAngle = constrain(currentAngle - (k * (photo_diff-1)), 0, 180); }
     // if (abs(photo_diff) > abs(photo_average)) { currentAngle = constrain(currentAngle - (k * photo_diff), 0, 180); }
 
 
