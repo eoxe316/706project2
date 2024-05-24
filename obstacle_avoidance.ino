@@ -37,9 +37,10 @@ enum STATE {
 /*********MOTION STATES**********/
 enum MOTION{
     FORWARD,
-    STRAFE_LEFT,
-    STRAFE_RIGHT,
-    TURN_180
+    TURN_LEFT,
+    TURN_RIGHT,
+    FAN_ON,
+    FAN_OFF
     //add more later
 };
 
@@ -61,6 +62,9 @@ bool avoid_flag;
 
 MOTION escape_command;
 bool escape_flag;
+
+MOTION fan_command;
+bool fire_flag;
 
 MOTION motor_input;
 
@@ -172,6 +176,9 @@ double photo_thresh1 = 1000;
 double photo_thresh2 = 1000;
 double photo_thresh3 = 1000;
 double photo_thresh4 = 1000;
+
+/******FAN SETUP******/
+int fan_timer;
 
 
 void setup(void)
@@ -328,13 +335,28 @@ void avoid(){
     avoid_flag = false;
   }else if(check_bits(MR1) && check_bits(MR2)){
     avoid_flag = true;
-    avoid_command = STRAFE_RIGHT;
+    avoid_command = TURN_RIGHT;
   }else if(check_bits(MR1) || (!check_bits(MR2) && check_bits(LR1))){
     avoid_flag = true;
-    avoid_command = STRAFE_RIGHT;
+    avoid_command = TURN_RIGHT;
   }else{
     avoid_flag = true;
-    avoid_command = STRAFE_LEFT;
+    avoid_command = TURN_LEFT;
+  }
+}
+
+void put_out_fire(){
+  //add correct count for fan timer
+  if((fan_timer < 100000) && (middle_phototransistors > certain value) && (check_bits(SONAR) || check_bits(LR1) || check_bits(LR3))){
+    fire_flag = true;
+    fan_command = FAN_ON;
+    fan_timer++;
+  }else{
+    fire_flag = false;
+    fan_command = FAN_OFF;
+
+    //reset fan_timer
+    fan_timer = 0;
   }
 }
 
@@ -347,6 +369,10 @@ void arbitrate(){
         BluetoothSerial.println("Avoiding you");
         motor_input = avoid_command;
     }
+    if(fire_flag == true){
+        BluetoothSerial.println("FiRE FIRE FIRE"); 
+        motor_input = fan_command;
+    }
     robot_move();
 }
 
@@ -356,16 +382,18 @@ void robot_move(){
         case FORWARD:
             ClosedLoopStraight(200);
             break;
-        case STRAFE_LEFT:
-            // ClosedLoopStrafe(-300);
+        case TURN_LEFT:
             ccw();
             break;
-        case STRAFE_RIGHT:
-            // ClosedLoopStrafe(300);
+        case TURN_RIGHT:
             cw();
             break;
-        case TURN_180:
-            ccw();          //might need to make a closed loop turn function? maybe not
+
+        //
+        case FAN_ON:
+            fan_on();
+        case FAN_OFF:
+            fan_off();
             break;
     }
 }
@@ -944,7 +972,7 @@ void cw ()
   right_font_motor.writeMicroseconds(1500 + speed_val);
 }
 
-void strafe_left ()
+void TURN_LEFT ()
 {
   left_font_motor.writeMicroseconds(1500 - speed_val);
   left_rear_motor.writeMicroseconds(1500 + speed_val);
@@ -952,7 +980,7 @@ void strafe_left ()
   right_font_motor.writeMicroseconds(1500 - speed_val);
 }
 
-void strafe_right ()
+void TURN_RIGHT ()
 {
   left_font_motor.writeMicroseconds(1500 + speed_val);
   left_rear_motor.writeMicroseconds(1500 - speed_val);
