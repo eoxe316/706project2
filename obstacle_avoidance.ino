@@ -328,7 +328,7 @@ void avoid(){
     avoid_flag = false;
   }else if(check_bits(MR1) && check_bits(MR2)){
     avoid_flag = true;
-    avoid_command = TURN_180;
+    avoid_command = STRAFE_RIGHT;
   }else if(check_bits(MR1) || (!check_bits(MR2) && check_bits(LR1))){
     avoid_flag = true;
     avoid_command = STRAFE_RIGHT;
@@ -354,7 +354,7 @@ void arbitrate(){
 void robot_move(){
     switch (motor_input){
         case FORWARD:
-            ClosedLoopStraight(300);
+            ClosedLoopStraight(200);
             break;
         case STRAFE_LEFT:
             // ClosedLoopStrafe(-300);
@@ -570,7 +570,7 @@ double SonarCheck(double angle_in)
 }
 
 double KalmanSonar(double rawdata){   // Kalman Filter
-  rawdata = constrain(rawdata, sonar_cm - 20, sonar_cm + 20);
+  //rawdata = constrain(rawdata, sonar_cm - 20, sonar_cm + 20);
   double a_post_est, a_priori_var, a_post_var, kalman_gain;
 
   a_priori_var = sonar_variance + process_noise_sonar; 
