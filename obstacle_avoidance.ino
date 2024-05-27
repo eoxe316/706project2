@@ -40,7 +40,8 @@ enum MOTION{
     TURN_LEFT,
     TURN_RIGHT,
     FAN_ON,
-    FAN_OFF
+    FAN_OFF,
+    STOP
     //add more later
 };
 
@@ -65,8 +66,13 @@ bool escape_flag;
 
 MOTION fan_command;
 bool fire_flag;
+int fires_put_out = 0;
+int fan_start_time;
 
-MOTION motor_input;
+MOTION stop_command;
+bool stop_flag;
+
+MOTION ;
 
 /*******************COMPONENT SET-UP**********************/
 /***WHEEL MOTORS***/
@@ -274,6 +280,8 @@ STATE running() {
 
   move_forward();
   avoid();
+  put_out_fire();
+  all_fires_extinguished();
   arbitrate();
   
   return RUNNING;
@@ -321,7 +329,7 @@ void move_forward(){
     forward_flag = true;
 }
 
-void avoid(){
+void (){
   BluetoothSerial.println(IR_bin);
   for (int i = 0; i <= 4; i++){
     BluetoothSerial.print("BIT POS");
@@ -346,18 +354,36 @@ void avoid(){
 }
 
 void put_out_fire(){
-  //add correct count for fan timer
-  if((fan_timer < 100000) && (middle_phototransistors > certain value) && (check_bits(SONAR) || check_bits(LR1) || check_bits(LR3))){
+  //initial fire check
+  if((middle_phototransistors > certain_value) && (check_bits(SONAR) || check_bits(LR1) || check_bits(LR3))){
     fire_flag = true;
     fan_command = FAN_ON;
-    fan_timer++;
+    //if this is the first time its turning on the fan
+    if(digitalRead(FAN) == LOW){
+      fan_start_time = millis();    //start the 10s timer
+    }
+  //check if the fan is already on
+  }else if(digitalRead(FAN) == HIGH){
+    //if fire goes out or 10s elapsed
+    if(middle_phototransistors < certain_value || (millis() - fan_start_time >= 10000)){
+      fire_flag = false;
+      fan_command = FAN_OFF;
+      fires_put_out++;
+    }
+  //if nothing
   }else{
     fire_flag = false;
     fan_command = FAN_OFF;
-
-    //reset fan_timer
-    fan_timer = 0;
   }
+}
+
+void all_fires_extinguished(){
+  if(fires_put_out == 2){
+    stop_flag = true;
+  }else{
+    stop_flag = false;
+  }
+  stop_command = STOP;
 }
 
 void arbitrate(){
@@ -372,6 +398,10 @@ void arbitrate(){
     if(fire_flag == true){
         BluetoothSerial.println("FiRE FIRE FIRE"); 
         motor_input = fan_command;
+    }
+    if(stop_flag == true){
+        BluetoothSerial.println("FIRES PUT OUT");
+        motor_input = stop_command;
     }
     robot_move();
 }
@@ -388,12 +418,14 @@ void robot_move(){
         case TURN_RIGHT:
             cw();
             break;
-
-        //
         case FAN_ON:
             fan_on();
+            break;
         case FAN_OFF:
             fan_off();
+            break;
+        case STOP;
+            stop_robot();
             break;
     }
 }
