@@ -219,7 +219,7 @@ void setup(void)
   pinMode(A14, INPUT);
 
   //Initialise and set turret motor to 0 position
-  turret_motor.attach(18);
+  turret_motor.attach(8);
   turret_motor.write(90);
 
   //Initialise fan pin
@@ -360,7 +360,7 @@ void avoid(){
 void put_out_fire(){
   //initial fire check
   float middle_avg = (photo2_avg+photo3_avg)/2;
-  if((middle_avg < 580) && (check_bits(SONAR) || check_bits(LR1) || check_bits(LR3))){
+  if((middle_avg < 600) && (check_bits(SONAR) || check_bits(LR1) || check_bits(LR3))){
     fire_flag = true;
     fan_command = FAN_ON;
     //if this is the first time its turning on the fan
