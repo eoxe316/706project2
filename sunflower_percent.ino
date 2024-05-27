@@ -332,7 +332,7 @@ STATE running() {
   filter_IR_reading();
 
   Sunflower();
-  // ClosedLoopStraight(200);
+  ClosedLoopStraight(200);
 
 
 //   move_forward();
@@ -358,26 +358,27 @@ void Sunflower()
     float photo_diff = (photo_diff1 + photo_diff2)-(photo_diff3 + photo_diff4);  
 
     //Changes the rate of turning based on how far away the robot is from the light
-    float photo_diff_wgt = ((constrain(photo_side_avg/1100, 0.6, 1))-0.6)*10*photo_diff;
+    float photo_diff_wgt = ((constrain(photo_side_avg/1100, 0.6, 1))-0.5)*10*photo_diff;
 
 
     // Changes the current angle to move the angle depending on what sensors are faced towards the light
     //so if photo diff brought down the average
     if (abs(photo_diff) > (0.03)) {
-      currentAngle = constrain(currentAngle - (k * photo_diff_wgt), 0, 180); 
+      float angle_change = constrain((k * photo_diff_wgt), -5, 5);
+      currentAngle = constrain(currentAngle - angle_change, 0, 180); 
     }
 
     // // Changes turret angle
     turret_motor.write(currentAngle);
-    BluetoothSerial.print("Photo diff weight");
-    BluetoothSerial.println(photo_diff_wgt);
-    BluetoothSerial.print("Photo diff");
-    BluetoothSerial.println(photo_diff);
-    BluetoothSerial.print("Average photo transistor val ");
-    BluetoothSerial.println(photo_side_avg);
-    BluetoothSerial.print("current Angle: ");
-    BluetoothSerial.println(currentAngle);
-    transistors_print();
+    // BluetoothSerial.print("Photo diff weight");
+    // BluetoothSerial.println(photo_diff_wgt);
+    // BluetoothSerial.print("Photo diff");
+    // BluetoothSerial.println(photo_diff);
+    // BluetoothSerial.print("Average photo transistor val ");
+    // BluetoothSerial.println(photo_side_avg);
+    // BluetoothSerial.print("current Angle: ");
+    // BluetoothSerial.println(currentAngle);
+    // transistors_print();
 
 
 }
@@ -540,14 +541,21 @@ void ClosedLoopStraight(int speed_val)
 {
     double e, correction_val;
 
-    double kp_gyro = 30;
-    double ki_gyro = 1;
+    double kp_gyro = 5;
+    double ki_gyro = 0;
 
-    e = -(currentAngle - 90);
+    BluetoothSerial.print("CURRENT SERVO ANGLE: ");
+    BluetoothSerial.println(currentAngle);
+
+    e = (currentAngle - 90);
 
     double correction_val_1 = kp_gyro * e + ki_gyro * ki_straight_gyro;
 
     correction_val = constrain(correction_val_1, -300, 300);
+    BluetoothSerial.print("CURRENT SERVO ANGLE: ");
+    BluetoothSerial.println(currentAngle);
+    BluetoothSerial.print("CORRECTION VAL ");
+    BluetoothSerial.println(correction_val);
 
     ki_straight_gyro += e;
 
