@@ -219,8 +219,8 @@ void setup(void)
   pinMode(A14, INPUT);
 
   //Initialise and set turret motor to 0 position
-  // turret_motor.attach(8);
-  // turret_motor.write(90);
+  turret_motor.attach(18);
+  turret_motor.write(90);
 
   //Initialise fan pin
   pinMode(fan_pin, OUTPUT);
@@ -359,8 +359,8 @@ void avoid(){
 
 void put_out_fire(){
   //initial fire check
-  float middle_phototransistors = photo2_avg+photo3_avg/2;
-  if((middle_phototransistors > 500) && (check_bits(SONAR) || check_bits(LR1) || check_bits(LR3))){
+  float middle_avg = (photo2_avg+photo3_avg)/2;
+  if((middle_avg < 580) && (check_bits(SONAR) || check_bits(LR1) || check_bits(LR3))){
     fire_flag = true;
     fan_command = FAN_ON;
     //if this is the first time its turning on the fan
@@ -370,7 +370,7 @@ void put_out_fire(){
   //check if the fan is already on
   }else if(digitalRead(fan_pin) == HIGH){
     //if fire goes out or 10s elapsed
-    if(middle_phototransistors < 800 || (millis() - fan_start_time >= 10000)){
+    if(middle_avg > 800 || (millis() - fan_start_time >= 10000)){
       fire_flag = false;
       fan_command = FAN_OFF;
       fires_put_out++;
