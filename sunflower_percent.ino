@@ -263,7 +263,8 @@ STATE initialising() {
   //Locate the light before beginning
   // locate_light();
 
-
+  // turret_motor.write(0);
+  // currentAngle = 0;
   return RUNNING;
 }
 
@@ -274,27 +275,35 @@ float photo4_avg;
 
 STATE Mothing()
 {
+  //Check if there are significant differences in values
   avgphototrans();
+  float photo_side_avg = (photo1_avg + photo2_avg + photo3_avg + photo4_avg)/4;
+  
+  float photo_diff1 = photo1_avg/photo_side_avg;
+  float photo_diff2 = photo2_avg/photo_side_avg;
+  float photo_diff3 = photo3_avg/photo_side_avg;
+  float photo_diff4 = photo4_avg/photo_side_avg;
+  float photo_diff = (photo_diff1 + photo_diff2)-(photo_diff3 + photo_diff4); 
 
-  float f1 = photo1_avg + photo2_avg;
-  float f2 = photo3_avg + photo4_avg;
+  //First find the light
+  // float f1 = photo1_avg + photo2_avg;
+  // float f2 = photo3_avg + photo4_avg;
 
-  if ((f1 - f2) < 0)
+
+  if (abs(photo_diff) > 0.04)
   {
-    BluetoothSerial.println("Found Light");
-
+    BluetoothSerial.println("Light spotted");
     return RUNNING;
   }
 
-  // if (currentAngle <= 180) { currentAngle += 5; }
-  // turret_motor.write(currentAngle);
+  if (currentAngle < 180) { currentAngle += 5; }
+  turret_motor.write(currentAngle);
 
   BluetoothSerial.println("MOTHING");
   BluetoothSerial.println(currentAngle);
-  BluetoothSerial.println(f1 - f2);
   
 
-  return RUNNING;
+  return MOTHING;
 }
 
 void avgphototrans()
@@ -322,7 +331,6 @@ void avgphototrans()
   photo2_avg = photo2_avg / 10;
   photo3_avg = photo3_avg / 10;
   photo4_avg = photo4_avg / 10;
-
 }
 
 
@@ -332,12 +340,11 @@ STATE running() {
   filter_IR_reading();
 
   Sunflower();
-  ClosedLoopStraight(200);
+  // ClosedLoopStraight(200);
 
-
-//   move_forward();
-//   avoid();
-//   arbitrate();
+  move_forward();
+  avoid();
+  arbitrate();
 
   
   return RUNNING;
@@ -379,8 +386,6 @@ void Sunflower()
     // BluetoothSerial.print("current Angle: ");
     // BluetoothSerial.println(currentAngle);
     // transistors_print();
-
-
 }
 
 /*******************STOPPED**********************/
