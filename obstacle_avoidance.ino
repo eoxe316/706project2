@@ -329,7 +329,7 @@ void move_forward(){
     forward_flag = true;
 }
 
-void (){
+void avoid(){
   BluetoothSerial.println(IR_bin);
   for (int i = 0; i <= 4; i++){
     BluetoothSerial.print("BIT POS");
