@@ -138,7 +138,7 @@ const unsigned int MAX_DIST = 23200;
 
 double sonar_cm = 0;
 double cm = 0;
-int sonar_MA_n = 20;
+int sonar_MA_n = 10;
 
 //Sonar Kalman
 double sensor_noise_sonar = 10;
@@ -198,11 +198,15 @@ double photo_thresh4 = 1000;
 
 /******FAN SETUP******/
 int fan_timer;
+int fire_count = 0;
 
 
 void setup(void)
 {
   BluetoothSerial.begin(115200);
+  BluetoothSerial.println("");
+  BluetoothSerial.println("");
+  BluetoothSerial.println("");
   BluetoothSerial.println("");
   BluetoothSerial.println("");
   BluetoothSerial.println("");
@@ -263,7 +267,9 @@ void loop(void) //main loop
     conv_binary(SONAR, sonar_cm);
     Gyro();
     avgphototrans();
-    delay(10);
+    read_IR_sensors();
+    filter_IR_reading();
+    delay(20);
 }
 
 STATE initialising() {
@@ -282,20 +288,22 @@ STATE initialising() {
   }
   gyroZeroVoltage = sum1 / 200; // average the sum as the zero drifting
 
-  SonarCheck(90); //Initialise sonar values
-  initialise_IR();
   initialise_transistors();
+  initialise_IR();
+  SonarCheck(90);
 
   for (int i = 0; i < 10; i++)
   {
     avgphototrans();
     delay(10);
   }
-  turret_motor.write(0);
-  currentAngle = 0;
+  //CHANGE BACK WHEN GOING TO MOTHING DIRECTLY
+  turret_motor.write(90);
+  currentAngle = 90;
 
   BluetoothSerial.println("initialise complete");
-  return MOTHING;
+  
+  return RUNNING;
 }
 
 float data[2][2] = {
@@ -392,8 +400,6 @@ STATE Mothing()
 }
 
 STATE running() {
-  read_IR_sensors();
-  filter_IR_reading();
   Sunflower();
 
 
@@ -402,6 +408,10 @@ STATE running() {
   put_out_fire();
   all_fires_extinguished();
   arbitrate();
+
+  if(stop_flag){
+    return STOPPED;
+  }
   
   return RUNNING;
 }
@@ -475,25 +485,36 @@ void avoid(){
 void put_out_fire(){
   //initial fire check
   float middle_avg = (photo2_avg+photo3_avg)/2;
-  if((middle_avg < 650) && (check_bits(SONAR) || check_bits(LR1) || check_bits(LR3))){
-    fire_flag = true;
-    fan_command = FAN_ON;
-    //if this is the first time its turning on the fan
-    if(digitalRead(fan_pin) == LOW){
-      fan_start_time = millis();    //start the 10s timer
-    }
+  if((middle_avg < 300) && (check_bits(SONAR) || check_bits(LR1) || check_bits(LR3))){
+    // fire_count++;
+    // if (fire_count == 3){
+      fire_flag = true;
+      fan_command = FAN_ON;
+      digitalWrite(fan_pin, HIGH);
+      //if this is the first time its turning on the fan
+      if(digitalRead(fan_pin) == LOW){
+        fan_start_time = millis();    //start the 10s timer
+      }
+    // }
   //check if the fan is already on
   }else if(digitalRead(fan_pin) == HIGH){
     //if fire goes out or 10s elapsed
-    if(middle_avg > 800 || (millis() - fan_start_time >= 10000)){
+    if(middle_avg > 900 || (millis() - fan_start_time >= 8000)){
+      BluetoothSerial.println("Fire has been put out --------------------------");
+      //blocking code
+      digitalWrite(fan_pin, LOW);
+      cw();
+      delay(500);
       fire_flag = false;
       fan_command = FAN_OFF;
+      fire_count = 0;
       fires_put_out++;
     }
   //if nothing
   }else{
     fire_flag = false;
     fan_command = FAN_OFF;
+    fire_count = 0;
   }
 }
 
@@ -540,11 +561,11 @@ void robot_move(){
             break;
         case FAN_ON:
             stop();
-            digitalWrite(fan_pin, HIGH);
+            BluetoothSerial.println("bruhbruhbrubruhrbruruahsdhajsd");
             // fan_on();
             break;
         case FAN_OFF:
-            digitalWrite(fan_pin, HIGH);
+            BluetoothSerial.println("STOPPPPPPPPPPPPPPPPP THE FANNNNNNNNNNNNNN");
             // fan_off();
             break;
         case STOP:
@@ -565,15 +586,15 @@ void Sunflower()
     float photo_diff3 = photo3_avg/photo_side_avg;
     float photo_diff4 = photo4_avg/photo_side_avg;
     
-    float photo_diff = (photo_diff1 + photo_diff2)-(photo_diff3 + photo_diff4);  
+    float photo_diff = (photo_diff2)-(photo_diff3);  
 
     //Changes the rate of turning based on how far away the robot is from the light
-    float photo_diff_wgt = ((constrain(photo_side_avg/1100, 0.6, 1))-0.5)*10*photo_diff;
+    float photo_diff_wgt = ((constrain(photo_side_avg/1000, 0.6, 1))-0.5)*10*photo_diff;
 
 
     // Changes the current angle to move the angle depending on what sensors are faced towards the light
     //so if photo diff brought down the average
-    if (abs(photo_diff) > (0.03)) {
+    if (abs(photo_diff) > (0.02)) {
       float angle_change = constrain((k * photo_diff_wgt), -5, 5);
       currentAngle = constrain(currentAngle - angle_change, 0, 180); 
     }
@@ -790,8 +811,8 @@ void Sonar()
     //of sound in air at sea level (~340 m/s).
     cm = pulse_width / 58.0;
 
+    sonar_cm = cm;
     
-    (sonar_cm == 0 ? sonar_cm = cm : sonar_cm = KalmanSonar(cm));
 
     // BluetoothSerial.print("Raw Sonar Reading");
     // BluetoothSerial.println(cm);
@@ -803,7 +824,7 @@ void Sonar()
 double SonarCheck(double angle_in)
 {
     turret_motor.write(angle_in);
-    delay(300);
+    delay(100);
 
     double sonar_sum = 0;
     int value_count = 0;
@@ -840,7 +861,7 @@ void initialise_IR(){
 double MR1sum, MR2sum, LR1sum, LR3sum;
 int iterations = 20;
 
-  for (int i = 0; i<=iterations; i++){
+  for (int i = 0; i<iterations; i++){
     read_IR_sensors();
     MR1sum = MR1mm_reading;
     MR2sum = MR2mm_reading;
@@ -848,10 +869,10 @@ int iterations = 20;
     LR3sum = LR3mm_reading;
     delay(5);
   }
-  MR1mm = MR1sum/iterations;
-  MR2mm = MR2sum/iterations;
-  LR1mm = LR1sum/iterations;
-  LR3mm = LR3sum/iterations;
+  MR1mm = 40;
+  MR2mm = 40;
+  LR1mm = 40;
+  LR3mm = 40;
   print_IR();
 }
 
@@ -877,6 +898,10 @@ void filter_IR_reading(){
   MR2mm = Kalman_IR(MR2mm_reading, MR2mm, &MR2_var);
   LR1mm = Kalman_IR(LR1mm_reading, LR1mm, &LR1_var);
   LR3mm = Kalman_IR(LR3mm_reading, LR3mm, &LR3_var);
+  // MR1mm = MR1mm_reading;
+  // MR2mm = MR2mm_reading;
+  // LR1mm = LR1mm_reading;
+  // LR3mm = LR3mm_reading;
 
   conv_binary(MR1, MR1mm);
   conv_binary(MR2, MR2mm);
@@ -923,12 +948,6 @@ void print_IR(){
   // BluetoothSerial.print(MR1mm_reading);
   BluetoothSerial.print(" MR1: ");
   BluetoothSerial.println(MR1mm);
-
-
-
-
-
-
 
   BluetoothSerial.print("Sonar ");
   BluetoothSerial.println(sonar_cm);
@@ -990,27 +1009,32 @@ void avgphototrans()
 {
   update_transistors();
 
-  photo1_avg = photo1;
-  photo2_avg = photo2;
-  photo3_avg = photo3;
-  photo4_avg = photo4;
+  // photo1_avg = photo1;
+  // photo2_avg = photo2;
+  // photo3_avg = photo3;
+  // photo4_avg = photo4;
 
-  for (int i = 0; i < 10; i++)
-  {
-    update_transistors();
+  // for (int i = 0; i < 10; i++)
+  // {
+  //   update_transistors();
 
-    delay(5);
+  //   delay(5);
 
-    photo1_avg += photo1;
-    photo2_avg += photo2;
-    photo3_avg += photo3;
-    photo4_avg += photo4;
-  }
+  //   photo1_avg += photo1;
+  //   photo2_avg += photo2;
+  //   photo3_avg += photo3;
+  //   photo4_avg += photo4;
+  // }
 
-  photo1_avg = photo1_avg / 10;
-  photo2_avg = photo2_avg / 10;
-  photo3_avg = photo3_avg / 10;
-  photo4_avg = photo4_avg / 10;
+  // photo1_avg = photo1_avg / 10;
+  // photo2_avg = photo2_avg / 10;
+  // photo3_avg = photo3_avg / 10;
+  // photo4_avg = photo4_avg / 10;
+  photo1_avg = photo_reading1;
+  photo2_avg = photo_reading2;
+  photo3_avg = photo_reading3;
+  photo4_avg = photo_reading4;
+  
 }
 
 void transistors_print(){
@@ -1058,7 +1082,7 @@ void conv_binary(IR_BINARY binary_type, double reading){
     threshold = 20;
   }
   else if(binary_type == LR1){
-    threshold = 15;
+    threshold = 20;
   }
   else if(binary_type == MR2){
     threshold = 10;
