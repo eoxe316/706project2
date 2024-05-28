@@ -264,9 +264,6 @@ STATE initialising() {
   //Locate the light before beginning
   // locate_light();
 
-  turret_motor.write(0);
-  currentAngle = 0;
-
   for (int i = 0; i < 100; i++)
   {
     avgphototrans();
@@ -286,10 +283,11 @@ float data[2][2] = {
   {0,0}
 };
 
-float datavals[2] = {99999999999, 0};
-
 int step_moth = 0;
 float finAngleServ = 0;
+
+float conv[3] = {1024, 1024, 1024};
+float prev_conv = 0;
 
 STATE Mothing()
 {
@@ -299,69 +297,47 @@ STATE Mothing()
   {
     case SERVO_TURNING:
 
+      ccw();
+
       BluetoothSerial.println(photo2_avg + photo3_avg);
 
-      if (photo2_avg + photo3_avg < datavals[0])
+      float sum = (photo2_avg + photo3_avg) / 2;
+
+      float convsum = 10*sum + 0.1*conv[0] - 0.1*conv[1] - 10*conv[2];
+      
+      conv[2] = conv[1];
+      conv[1] = conv[0];
+      conv[0] = sum;
+
+      if ((prev_conv < 0) && (abs(convsum - prev_conv) > 30))
       {
-        datavals[0] = photo2_avg + photo3_avg;
-        datavals[1] = currentAngle;
+        stop();
+        mothing_state = FINDING;
+        break;
       }
 
-      currentAngle += 5;
-      turret_motor.write(currentAngle);
+      prev_conv = convsum;
 
-      if (currentAngle >= 180) 
-      { 
+      BluetoothSerial.print("Convolution output: ");
+      BluetoothSerial.println(convsum);
 
-        data[0][step_moth] = datavals[0];
-        data[1][step_moth] = (step_moth == 0) ? (-datavals[1]) + 90 : -datavals[1] + 270;
-
-        BluetoothSerial.print(" Current Min: ");
-        BluetoothSerial.println(data[1][0]);
-
-        if (step_moth == 0)
-        {
-          mothing_state = ROBOTO_TURNING;
-          gyroAngle = 0;
-          currentAngle = 0;
-          step_moth = 1;
-          break;
-        }
-        else
-        {
-          mothing_state = FINDING;
-          BluetoothSerial.println(data[1][0]);
-          BluetoothSerial.println(data[1][1]);
-
-          finAngleServ = (data[0][0] < data[0][1]) ? data[1][0] : data[1][1];
-
-
-
-          BluetoothSerial.print(" Data 1: ");
-          BluetoothSerial.println(data[0][0]);
-          BluetoothSerial.print(" Data 2: ");
-          BluetoothSerial.println(data[0][1]);
-
-          gyroAngle = 180;
-          break;
-        }
-      }
+      
     break;
     case ROBOTO_TURNING:
     
-    ClosedLoopTurn(200, 180);
-    turret_motor.write(0);
+    // ClosedLoopTurn(200, 180);
+    // turret_motor.write(0);
 
-    if (gyroAngle > 180)
-    {
-      mothing_state = SERVO_TURNING;
-      datavals[0] = 999999999;
-      datavals[1] = 58.3;
-    }
+    // if (gyroAngle > 180)
+    // {
+    //   mothing_state = SERVO_TURNING;
+    //   datavals[0] = 999999999;
+    //   datavals[1] = 58.3;
+    // }
 
     break;
     case FINDING:
-      ClosedLoopTurn(200, finAngleServ);
+      // ClosedLoopTurn(200, finAngleServ);
     break;
   }
   
