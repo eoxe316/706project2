@@ -127,7 +127,7 @@ unsigned int IR_bin = 0b00000;
 
 //IR Kalman
 double MR1_var, MR2_var, LR1_var, LR3_var = 0;
-double sensor_noise_ir = 8;
+double sensor_noise_ir = 5;
 double process_noise_ir = 1;
 
 
@@ -182,8 +182,11 @@ double photo1, photo2, photo3, photo4;
 double photo_reading1, photo_reading2, photo_reading3, photo_reading4;
 bool photo_light1, photo_light2, photo_light3, photo_light4;
 float photo1_avg, photo2_avg, photo3_avg, photo4_avg;
-float photo1_face, photo2_face, photo3_face, photo4_face;
 
+float photo1_off = 900;
+float photo2_off = 1010;
+float photo3_off = 1024;
+float photo4_off = 1024;
 //Pins
 int photo_pin1 = A12;
 int photo_pin2 = A13;
@@ -303,7 +306,7 @@ STATE initialising() {
 
   BluetoothSerial.println("initialise complete");
   
-  return RUNNING;
+  return MOTHING;
 }
 
 float data[2][2] = {
@@ -311,10 +314,11 @@ float data[2][2] = {
   {0,0}
 };
 
-float datavals[2] = {9999, 0};
-
 int step_moth = 0;
 float finAngleServ = 0;
+
+float conv[3] = {1024, 1024, 1024};
+float prev_conv = 0;
 
 STATE Mothing()
 {
@@ -323,79 +327,53 @@ STATE Mothing()
   switch (mothing_state)
   {
     case SERVO_TURNING:
-    
+
+      ccw();
+
       BluetoothSerial.println(photo2_avg + photo3_avg);
 
-      if (photo2_avg + photo3_avg < datavals[0])
+      float sum = (photo2_avg + photo3_avg) / 2;
+
+      float convsum = 100*sum - 100*conv[2];
+      
+      conv[2] = conv[1];
+      conv[1] = conv[0];
+      conv[0] = sum;
+
+      if ((prev_conv < 0) && (abs(convsum - prev_conv) > 100))
       {
-        datavals[0] = photo2_avg + photo3_avg;
-        datavals[1] = currentAngle;
+        stop();
+        mothing_state = FINDING;
+        return RUNNING;
+        break;
       }
 
-      currentAngle += 5;
-      turret_motor.write(currentAngle);
+      prev_conv = convsum;
 
-      if (currentAngle >= 180) 
-      { 
+      BluetoothSerial.print("Convolution output: ");
+      BluetoothSerial.println(convsum);
 
-        data[0][step_moth] = datavals[0];
-        data[1][step_moth] = (step_moth == 0) ? (-datavals[1]) + 90 : -datavals[1] + 270;
-
-        BluetoothSerial.print(" Current Min: ");
-        BluetoothSerial.println(data[1][0]);
-
-        if (step_moth == 0)
-        {
-          mothing_state = ROBOTO_TURNING;
-          gyroAngle = 0;
-          currentAngle = 0;
-          step_moth = 1;
-          break;
-        }
-        else
-        {
-          mothing_state = FINDING;
-          BluetoothSerial.println(data[1][0]);
-          BluetoothSerial.println(data[1][1]);
-
-          finAngleServ = (data[0][0] < data[0][1]) ? data[1][0] : data[1][1];
-
-          BluetoothSerial.print(" Data 1: ");
-          BluetoothSerial.println(data[0][0]);
-          BluetoothSerial.print(" Data 2: ");
-          BluetoothSerial.println(data[0][1]);
-
-          gyroAngle = 180;
-          turret_motor.write(90);
-          currentAngle = 90;
-          break;
-        }
-      }
+      
     break;
     case ROBOTO_TURNING:
     
-    ClosedLoopTurn(200, 180);
-    turret_motor.write(0);
+    // ClosedLoopTurn(200, 180);
+    // turret_motor.write(0);
 
-    if (gyroAngle > 180)
-    {
-      mothing_state = SERVO_TURNING;
-      datavals[0] = 9999;
-      datavals[1] = 58.3;
-    }
+    // if (gyroAngle > 180)
+    // {
+    //   mothing_state = SERVO_TURNING;
+    //   datavals[0] = 999999999;
+    //   datavals[1] = 58.3;
+    // }
 
     break;
     case FINDING:
-      ClosedLoopTurn(200, finAngleServ);
-      if (abs(gyroAngle-finAngleServ) < 10)
-      {
-        stop();
-        BluetoothSerial.println("At light");
-        delay(2000);
-        return RUNNING;
-      }
+      // ClosedLoopTurn(200, finAngleServ);
     break;
   }
+  
+
   return MOTHING;
 }
 
@@ -437,12 +415,12 @@ STATE stopped() {
       BluetoothSerial.print("Lipo OK waiting of voltage Counter 10 < ");
       BluetoothSerial.println(counter_lipo_voltage_ok);
       counter_lipo_voltage_ok++;
-      if (counter_lipo_voltage_ok > 10) { //Making sure lipo voltage is stable
-        counter_lipo_voltage_ok = 0;
-        enable_motors();
-        BluetoothSerial.println("Lipo OK returning to RUN STATE");
-        return RUNNING;
-      }
+      // if (counter_lipo_voltage_ok > 10) { //Making sure lipo voltage is stable
+      //   counter_lipo_voltage_ok = 0;
+      //   enable_motors();
+      //   BluetoothSerial.println("Lipo OK returning to RUN STATE");
+      //   return RUNNING;
+      // }
     } else
     {
       counter_lipo_voltage_ok = 0;
@@ -490,16 +468,17 @@ void put_out_fire(){
     // if (fire_count == 3){
       fire_flag = true;
       fan_command = FAN_ON;
-      digitalWrite(fan_pin, HIGH);
-      //if this is the first time its turning on the fan
       if(digitalRead(fan_pin) == LOW){
         fan_start_time = millis();    //start the 10s timer
       }
+      digitalWrite(fan_pin, HIGH);
+      //if this is the first time its turning on the fan
+
     // }
   //check if the fan is already on
   }else if(digitalRead(fan_pin) == HIGH){
     //if fire goes out or 10s elapsed
-    if(middle_avg > 900 || (millis() - fan_start_time >= 8000)){
+    if(middle_avg > 1200 || (millis() - fan_start_time >= 8000)){ //Original threshold is 900
       BluetoothSerial.println("Fire has been put out --------------------------");
       //blocking code
       digitalWrite(fan_pin, LOW);
@@ -581,10 +560,10 @@ void Sunflower()
 
     float photo_side_avg = (photo1_avg + photo2_avg + photo3_avg + photo4_avg)/4;
     
-    float photo_diff1 = photo1_avg/photo_side_avg;
-    float photo_diff2 = photo2_avg/photo_side_avg;
-    float photo_diff3 = photo3_avg/photo_side_avg;
-    float photo_diff4 = photo4_avg/photo_side_avg;
+    float photo_diff1 = constrain(photo1_avg/photo1_off, 0, 1);
+    float photo_diff2 = constrain(photo2_avg/photo2_off, 0, 1);
+    float photo_diff3 = constrain(photo3_avg/photo3_off, 0, 1);
+    float photo_diff4 = constrain(photo4_avg/photo4_off, 0, 1);
     
     float photo_diff = (photo_diff2)-(photo_diff3);  
 
@@ -594,7 +573,7 @@ void Sunflower()
 
     // Changes the current angle to move the angle depending on what sensors are faced towards the light
     //so if photo diff brought down the average
-    if (abs(photo_diff) > (0.02)) {
+    if (abs(photo_diff) > (0.05)) {
       float angle_change = constrain((k * photo_diff_wgt), -5, 5);
       currentAngle = constrain(currentAngle - angle_change, 0, 180); 
     }
@@ -869,8 +848,8 @@ int iterations = 20;
     LR3sum = LR3mm_reading;
     delay(5);
   }
-  MR1mm = 40;
-  MR2mm = 40;
+  MR1mm = 30;
+  MR2mm = 30;
   LR1mm = 40;
   LR3mm = 40;
   print_IR();
@@ -1084,9 +1063,9 @@ void conv_binary(IR_BINARY binary_type, double reading){
   else if(binary_type == LR1){
     threshold = 20;
   }
-  else if(binary_type == MR2){
-    threshold = 10;
-  }
+  // else if(binary_type == MR2){
+  //   threshold = 10;
+  // }
 
   if(reading <= threshold){
     IR_bin |= (1 << binary_type);   //flip its respective bit
