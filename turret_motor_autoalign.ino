@@ -1153,6 +1153,8 @@ void ccw ()
   right_font_motor.writeMicroseconds(1500 - speed);
 }
 
+// This is stupid
+
 void cw ()
 {
   left_font_motor.writeMicroseconds(1500 + speed_val);
