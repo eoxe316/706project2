@@ -303,13 +303,13 @@ STATE Mothing()
 
       float sum = (photo2_avg + photo3_avg) / 2;
 
-      float convsum = 10*sum + 0.1*conv[0] - 0.1*conv[1] - 10*conv[2];
+      float convsum = 100*sum - 100*conv[2];
       
       conv[2] = conv[1];
       conv[1] = conv[0];
       conv[0] = sum;
 
-      if ((prev_conv < 0) && (abs(convsum - prev_conv) > 30))
+      if ((prev_conv < 0) && (abs(convsum - prev_conv) > 100))
       {
         stop();
         mothing_state = FINDING;
