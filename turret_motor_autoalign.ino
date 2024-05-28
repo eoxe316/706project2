@@ -50,6 +50,12 @@ enum SERVO_MOTION{
     //Dunno if this should be seperate but just bear with me
 };
 
+enum MOTHINGO{
+  SERVO_TURNING,
+  ROBOTO_TURNING,
+  FINDING
+};
+
 /*********FUNCTION FLAGS AND OUTPUTS*********/
 MOTION forward_command;
 bool forward_flag;
@@ -224,7 +230,8 @@ void loop(void) //main loop
     };
     Sonar();
     Gyro();
-    // delay(10);
+    avgphototrans();
+    delay(10);
 }
 
 
@@ -260,6 +267,12 @@ STATE initialising() {
   turret_motor.write(0);
   currentAngle = 0;
 
+  for (int i = 0; i < 100; i++)
+  {
+    avgphototrans();
+    delay(10);
+  }
+
   return MOTHING;
 }
 
@@ -268,29 +281,92 @@ float photo2_avg;
 float photo3_avg;
 float photo4_avg;
 
+float data[2][2] = {
+  {0,0},
+  {0,0}
+};
+
+float datavals[2] = {99999999999, 0};
+
+int step_moth = 0;
+float finAngleServ = 0;
+
 STATE Mothing()
 {
-  avgphototrans();
+  static MOTHINGO mothing_state = SERVO_TURNING;
 
-  float f1 = photo1_avg + photo2_avg;
-  float f2 = photo3_avg + photo4_avg;
-
-  if ((f1 - f2) < 0)
+  switch (mothing_state)
   {
-    BluetoothSerial.println("Found Light");
+    case SERVO_TURNING:
 
-    return RUNNING;
+      BluetoothSerial.println(photo2_avg + photo3_avg);
+
+      if (photo2_avg + photo3_avg < datavals[0])
+      {
+        datavals[0] = photo2_avg + photo3_avg;
+        datavals[1] = currentAngle;
+      }
+
+      currentAngle += 5;
+      turret_motor.write(currentAngle);
+
+      if (currentAngle >= 180) 
+      { 
+
+        data[0][step_moth] = datavals[0];
+        data[1][step_moth] = (step_moth == 0) ? (-datavals[1]) + 90 : -datavals[1] + 270;
+
+        BluetoothSerial.print(" Current Min: ");
+        BluetoothSerial.println(data[1][0]);
+
+        if (step_moth == 0)
+        {
+          mothing_state = ROBOTO_TURNING;
+          gyroAngle = 0;
+          currentAngle = 0;
+          step_moth = 1;
+          break;
+        }
+        else
+        {
+          mothing_state = FINDING;
+          BluetoothSerial.println(data[1][0]);
+          BluetoothSerial.println(data[1][1]);
+
+          finAngleServ = (data[0][0] < data[0][1]) ? data[1][0] : data[1][1];
+
+
+
+          BluetoothSerial.print(" Data 1: ");
+          BluetoothSerial.println(data[0][0]);
+          BluetoothSerial.print(" Data 2: ");
+          BluetoothSerial.println(data[0][1]);
+
+          gyroAngle = 180;
+          break;
+        }
+      }
+    break;
+    case ROBOTO_TURNING:
+    
+    ClosedLoopTurn(200, 180);
+    turret_motor.write(0);
+
+    if (gyroAngle > 180)
+    {
+      mothing_state = SERVO_TURNING;
+      datavals[0] = 999999999;
+      datavals[1] = 58.3;
+    }
+
+    break;
+    case FINDING:
+      ClosedLoopTurn(200, finAngleServ);
+    break;
   }
-
-  if (currentAngle <= 180) { currentAngle += 5; }
-  turret_motor.write(currentAngle);
-
-  BluetoothSerial.println("MOTHING");
-  BluetoothSerial.println(currentAngle);
-  BluetoothSerial.println(f1 - f2);
   
 
-  return RUNNING;
+  return MOTHING;
 }
 
 void avgphototrans()
@@ -854,10 +930,10 @@ void read_transistors(){
 //   return (p4 * pow(x,4)) + (p3 * pow(x,3)) + (p2 * pow(x,2)) + (p1 * (x)) + p0;
 // }
 
-double pht1_avg = 0;
-double pht2_avg = 0;
-double pht3_avg = 0;
-double pht4_avg = 0;
+double pht1_avg = 1024;
+double pht2_avg = 1024;
+double pht3_avg = 1024;
+double pht4_avg = 1024;
 
 double w = 100;
 
