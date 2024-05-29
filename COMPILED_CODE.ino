@@ -308,6 +308,11 @@ STATE Mothing()
     stop();
     BluetoothSerial.println("Stop Now");
     conv_avg = 6000;
+
+    if (fires_put_out == 1)
+    {
+      fires_put_out = 2;
+    }
     return RUNNING;
 
     // delay(1000);
@@ -436,8 +441,8 @@ void put_out_fire(){
       //BluetoothSerial.println("Fire has been put out --------------------------");
       //blocking code
       digitalWrite(fan_pin, LOW);
-      cw();
-      delay(1000);
+      ccw();
+      delay(500);
       fire_flag = false;
       fan_command = FAN_OFF;
       fires_put_out++;
@@ -450,7 +455,7 @@ void put_out_fire(){
 }
 
 void all_fires_extinguished(){
-  if(fires_put_out == 2){
+  if(fires_put_out == 3){
     stop_flag = true;
   }else{
     stop_flag = false;
@@ -824,16 +829,20 @@ void filter_IR_reading(){
   //Average these to final value 
   double mrbuffer = 150;
   double lrbuffer = 500;
-  MR1mm = constrain(Kalman_IR(MR1mm_reading, MR1mm, &MR1_var), 0, 25);
-  MR2mm = constrain(Kalman_IR(MR2mm_reading, MR2mm, &MR2_var), 0, 25);
-  LR1mm = constrain(Kalman_IR(LR1mm_reading, LR1mm, &LR1_var), 0, 40);
-  LR3mm = constrain(Kalman_IR(LR3mm_reading, LR3mm, &LR3_var), 0, 40);
+  // MR1mm = constrain(Kalman_IR(MR1mm_reading, MR1mm, &MR1_var), 0, 25);
+  // MR2mm = constrain(Kalman_IR(MR2mm_reading, MR2mm, &MR2_var), 0, 25);
+  // LR1mm = constrain(Kalman_IR(LR1mm_reading, LR1mm, &LR1_var), 0, 40);
+  // LR3mm = constrain(Kalman_IR(LR3mm_reading, LR3mm, &LR3_var), 0, 40);
+  MR1mm = constrain(MR1mm_reading, 0, 25);
+  MR2mm = constrain(MR2mm_reading, 0, 25);
+  LR1mm = constrain(LR1mm_reading, 0, 40);
+  LR3mm = constrain(LR3mm_reading, 0, 40);
 
   conv_binary(MR1, MR1mm);
   conv_binary(MR2, MR2mm);
   conv_binary(LR1, LR1mm);
   conv_binary(LR3, LR3mm);
-  // print_IR();
+  print_IR();
 }
 
 double average_IR(double IR1, double IR2) {
