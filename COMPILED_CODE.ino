@@ -306,7 +306,7 @@ STATE initialising() {
 
   BluetoothSerial.println("initialise complete");
   
-  return MOTHING;
+  return RUNNING;
 }
 
 float data[2][2] = {
@@ -437,16 +437,16 @@ void move_forward(){
 }
 
 void avoid(){
-  BluetoothSerial.println(IR_bin);
-  for (int i = 0; i <= 4; i++){
-    BluetoothSerial.print("BIT POS");
-    BluetoothSerial.print(i);
-    BluetoothSerial.print(" READING ");
-    BluetoothSerial.println(bitRead(IR_bin, i));
-  }
+  // BluetoothSerial.println(IR_bin);
+  // for (int i = 0; i <= 4; i++){
+  //   BluetoothSerial.print("BIT POS");
+  //   BluetoothSerial.print(i);
+  //   BluetoothSerial.print(" READING ");
+  //   BluetoothSerial.println(bitRead(IR_bin, i));
+  // }
 
   if(!check_bits(LR1) && !check_bits(LR3) && !check_bits(SONAR)){
-    BluetoothSerial.println("NO AVOID REQUIRED");
+    //BluetoothSerial.println("NO AVOID REQUIRED");
     avoid_flag = false;
   }else if(check_bits(MR1) && check_bits(MR2)){
     avoid_flag = true;
@@ -463,14 +463,14 @@ void avoid(){
 void put_out_fire(){
   //initial fire check
   float middle_avg = (photo2_avg+photo3_avg)/2;
-  if((middle_avg < 300) && (check_bits(SONAR) || check_bits(LR1) || check_bits(LR3))){
+
+  if((digitalRead(fan_pin) == LOW) && (middle_avg < 300) && (check_bits(SONAR) || check_bits(LR1) || check_bits(LR3))){
     // fire_count++;
     // if (fire_count == 3){
       fire_flag = true;
       fan_command = FAN_ON;
-      if(digitalRead(fan_pin) == LOW){
-        fan_start_time = millis();    //start the 10s timer
-      }
+      BluetoothSerial.println("STARTED TIMER");
+      fan_start_time = millis();    //start the 10s timer
       digitalWrite(fan_pin, HIGH);
       //if this is the first time its turning on the fan
 
@@ -478,12 +478,13 @@ void put_out_fire(){
   //check if the fan is already on
   }else if(digitalRead(fan_pin) == HIGH){
     //if fire goes out or 10s elapsed
-    if(middle_avg > 1200 || (millis() - fan_start_time >= 8000)){ //Original threshold is 900
-      BluetoothSerial.println("Fire has been put out --------------------------");
+    BluetoothSerial.println("PUTTING PUTTIN GPTIEADLJLAKSJDLASKJDLASKDJLASKDJLASKDLJSAJD");
+    if((middle_avg > 1200) || (millis() - fan_start_time >= 8000)){
+      //BluetoothSerial.println("Fire has been put out --------------------------");
       //blocking code
       digitalWrite(fan_pin, LOW);
       cw();
-      delay(500);
+      delay(1000);
       fire_flag = false;
       fan_command = FAN_OFF;
       fire_count = 0;
@@ -1013,7 +1014,8 @@ void avgphototrans()
   photo2_avg = photo_reading2;
   photo3_avg = photo_reading3;
   photo4_avg = photo_reading4;
-  
+
+  // linearise_transistors();
 }
 
 void transistors_print(){
@@ -1029,6 +1031,18 @@ void transistors_print(){
   BluetoothSerial.print("Photo transistor4: ");
   BluetoothSerial.println(photo4_avg);
   BluetoothSerial.println("");
+}
+
+void linearise_transistors(){
+  //Basically throws transistors through equation to give linear distance value so we can actually deal with everything properly
+  if (photo_reading1 > 850){
+    photo1_avg = 0.0122*pow(photo_reading1,2)-(21.739*photo_reading1)+9741;
+  }
+  else{
+    photo1_avg = 0.001*pow(photo_reading1,2)-(0.055*photo_reading1)+26.2;
+  }
+
+  transistors_print();
 }
 
 void initialise_transistors(){
