@@ -122,7 +122,7 @@ unsigned int IR_bin = 0b00000;
 //IR Kalman
 double MR1_var, MR2_var, LR1_var, LR3_var = 0;
 double sensor_noise_ir = 8;
-double process_noise_ir = 1;
+double process_noise_ir = 2;
 
 
 /***ULTRASONIC***/
@@ -297,7 +297,7 @@ STATE Mothing()
 
   w = 100;
 
-  float convsum = (0.1*photo1_avg + 100*photo2_avg - 100*photo3_avg - 0.1*photo4_avg + 5*conv_avg) / (5 + 1);
+  float convsum = (0.1*photo1_avg + 102*photo2_avg - 93*photo3_avg - 0.092*photo4_avg + 5*conv_avg) / (5 + 1);
 
   conv_avg = (conv_avg + convsum) / 2;
 
@@ -326,7 +326,6 @@ STATE Mothing()
 STATE running() {
   read_IR_sensors();
   filter_IR_reading();
-  Sunflower();
 
 
   move_forward();
@@ -462,7 +461,7 @@ void arbitrate(){
 void robot_move(){
     switch (motor_input){
         case FORWARD:
-            ClosedLoopStraight(200);
+            ClosedLoopStraight(500);
             break;
         case TURN_LEFT:
             ccw();
@@ -530,7 +529,7 @@ void ClosedLoopStraight(int speed_val)
 
     double correction_val_1 = kp_gyro * e + ki_gyro * ki_straight_gyro;
 
-    correction_val = constrain(correction_val_1, -300, 300);
+    // correction_val = constrain(correction_val_1, -(500 - speed_val), (500 - speed_val));
     BluetoothSerial.print("CURRENT SERVO ANGLE: ");
     BluetoothSerial.println(currentAngle);
     BluetoothSerial.print("CORRECTION VAL ");
@@ -538,10 +537,15 @@ void ClosedLoopStraight(int speed_val)
 
     ki_straight_gyro += e;
 
-    left_font_motor.writeMicroseconds(1500 + speed_val - correction_val);
-    left_rear_motor.writeMicroseconds(1500 + speed_val - correction_val);
-    right_rear_motor.writeMicroseconds(1500 - speed_val - correction_val);
-    right_font_motor.writeMicroseconds(1500 - speed_val - correction_val);
+    double speed_in = constrain(speed_val, -(speed_val - (0.9*speed_val / 90) * abs(e)), (speed_val - (0.9*speed_val / 90) * abs(e)));
+    correction_val = constrain(correction_val_1, -(500 - speed_in), (500 - speed_in));
+
+    left_font_motor.writeMicroseconds(1500 + speed_in - correction_val);
+    left_rear_motor.writeMicroseconds(1500 + speed_in - correction_val);
+    right_rear_motor.writeMicroseconds(1500 - speed_in - correction_val);
+    right_font_motor.writeMicroseconds(1500 - speed_in - correction_val);
+
+    Sunflower();
 }
 
 
@@ -883,9 +887,9 @@ void update_transistors(){
 
   //Filters transistor values
   photo1 = (photo_reading1 + (w * pht1_avg)) / (w + 1);
-  photo2 = (1.02 * photo_reading2 + (w * pht2_avg)) / (w + 1);
-  photo3 = (0.93 * photo_reading3 + (w * pht3_avg)) / (w + 1);
-  photo4 = (0.92 * photo_reading4 + (w * pht4_avg)) / (w + 1);
+  photo2 = (photo_reading2 + (w * pht2_avg)) / (w + 1);
+  photo3 = (photo_reading3 + (w * pht3_avg)) / (w + 1);
+  photo4 = (photo_reading4 + (w * pht4_avg)) / (w + 1);
 
   pht1_avg = (pht1_avg + photo1) / 2;
   pht2_avg = (pht2_avg + photo2) / 2;
