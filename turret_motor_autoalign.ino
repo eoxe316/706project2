@@ -287,57 +287,29 @@ float conv_avg = 9300;
 
 STATE Mothing()
 {
-  static MOTHINGO mothing_state = SERVO_TURNING;
 
-  switch (mothing_state)
-  {
-    case SERVO_TURNING:
+  ccw();
 
-      ccw();
+  float convsum = (0.1*photo1_avg + 100*photo2_avg - 100*photo3_avg - 0.1*photo4_avg + 5*conv_avg) / (5 + 1);
 
-      float convsum = (0.1*photo1_avg + 100*photo2_avg - 100*photo3_avg - 0.1*photo4_avg + 5*conv_avg) / (5 + 1);
+  conv_avg = (conv_avg + convsum) / 2;
 
-      conv_avg = (conv_avg + convsum) / 2;
-
-      float grad = (((convsum - prev_conv) / 2) + prev_grad) / 2;
-
-      if ( prev_grad < -1.8 && grad > prev_grad)
-      {
-        stop();
-        BluetoothSerial.println("Stop Now");
-        // mothing_state = ROBOTO_TURNING;
-        // break;
-
-        delay(1000);
-      }
-
-      prev_conv = convsum;
-      prev_grad = grad;
-
-      BluetoothSerial.print("Grad output: ");
-      BluetoothSerial.println(grad);
-      BluetoothSerial.println(grad - prev_grad);
-
-      
-    break;
-    case ROBOTO_TURNING:
-    
-    // ClosedLoopTurn(200, 180);
-    // turret_motor.write(0);
-
-    // if (gyroAngle > 180)
-    // {
-    //   mothing_state = SERVO_TURNING;
-    //   datavals[0] = 999999999;
-    //   datavals[1] = 58.3;
-    // }
-
-    break;
-    case FINDING:
-      // ClosedLoopTurn(200, finAngleServ);
-    break;
-  }
+  float grad = (((convsum - prev_conv) / 2) + prev_grad) / 2;
   
+  if ( prev_grad < -1.8 && grad > prev_grad)
+  {
+    stop();
+    BluetoothSerial.println("Stop Now");
+    conv_avg = 6000;
+    return RUNNING;
+  }
+
+  prev_conv = convsum;
+  prev_grad = grad;
+
+  BluetoothSerial.print("Grad output: ");
+  BluetoothSerial.println(grad);
+  BluetoothSerial.println(grad - prev_grad);
 
   return MOTHING;
 }
@@ -390,59 +362,27 @@ STATE running() {
 
 void Sunflower()
 {
-  // Proportional gain
-    float k = 20;
 
+  float k = 0.005;
+  float w = 0;
 
-    float photo_side_avg = (photo1_avg + photo2_avg + photo3_avg + photo4_avg)/2;
+  float convsum = (10*photo1 + 1*photo2 - 1*photo3 - 10*photo4 + w*conv_avg) / (w + 1);
 
-    // Gets the weighted amount of reading from photo1 and 2
-    float photo_diff = (photo1_avg + photo2_avg)/(photo_side_avg); //we want this to effectively be 1
+  conv_avg = (conv_avg + convsum) / 2;
 
-    // photo_average = (photo_diff + (2 * photo_average)) / 3;
-
-    // //Based off total avg make Kp better or worse
-    // float kp = k*photo_tot_avg/1024;
-    // BluetoothSerial.print("Using KP ");
-    // BluetoothSerial.println(kp);
-
-
-    // Changes the current angle to move the angle depending on what sensors are faced towards the light
-    //so if photo diff brought down the average
-    if (abs(1 - photo_diff) > (0.10)) {
-      currentAngle = constrain(currentAngle - (k * (photo_diff-1)), 0, 180); 
-    }
-    // if (abs(photo_diff) > abs(photo_average)) { currentAngle = constrain(currentAngle - (k * photo_diff), 0, 180); }
-
-
-
-
-
-
-
-    // Proportional gain
-    // float k = 0.05;
-
-    // // Gets the change in angle required to balance the photo transistors
-    // // for (int i = 0; i < 10; i++)
-    // // {
-
-    // // }
-    // double photo_diff = (photo1_avg + photo2_avg) - (photo3_avg + photo4_avg);
-
-    // photo_average = (photo_diff + photo_average) / 2;
-
-
-    // // Changes the current angle to move the angle depending on what sensors are faced towards the light
-    // if (abs(photo_diff) < (2 * abs(photo_average))) { currentAngle = constrain(currentAngle - (k * photo_diff), 0, 180); }
-
-    // // Changes turret angle
+  float newangle = constrain(currentAngle - k * convsum, 0, 180);
+  
+  if (abs(newangle - currentAngle) > 0.5) 
+  {
     turret_motor.write(currentAngle);
+    currentAngle = newangle;
+  }
 
-    // BluetoothSerial.print("Photo diff: ");
-    // BluetoothSerial.println(photo_diff);
-    // BluetoothSerial.print("current Angle: ");
-    // BluetoothSerial.println(currentAngle);
+  // BluetoothSerial.print("Current Angle: ");
+  // BluetoothSerial.println(currentAngle);
+  // BluetoothSerial.print("Conv sum: ");
+  // BluetoothSerial.println(convsum);
+
 
 }
 
@@ -915,6 +855,8 @@ void update_transistors(){
   //Updates transistor state based on transistor readings
   read_transistors();
 
+  w = 2;
+
   //Filters transistor values
   // photo1 = Poly(photo_reading1, -0.000008, 0.0037, -0.659, 50.851, -501.98);
   // photo2 = Poly(photo_reading2, -0.000004, 0.0023, -0.5042, 45.173, -477.75);
@@ -922,23 +864,23 @@ void update_transistors(){
   // photo4 = Poly(photo_reading4, -0.000001, 0.0016, -0.4128, 41.197, -460.74);
 
   photo1 = (photo_reading1 + (w * pht1_avg)) / (w + 1);
-  photo2 = (1.02 * photo_reading2 + (w * pht2_avg)) / (w + 1);
-  photo3 = (0.93 * photo_reading3 + (w * pht3_avg)) / (w + 1);
-  photo4 = (0.92 * photo_reading4 + (w * pht4_avg)) / (w + 1);
+  photo2 = (photo_reading2 + (w * pht2_avg)) / (w + 1);
+  photo3 = (photo_reading3 + (w * pht3_avg)) / (w + 1);
+  photo4 = (photo_reading4 + (w * pht4_avg)) / (w + 1);
 
   pht1_avg = (pht1_avg + photo1) / 2;
   pht2_avg = (pht2_avg + photo2) / 2;
   pht3_avg = (pht3_avg + photo3) / 2;
   pht4_avg = (pht4_avg + photo4) / 2;
 
-  // BluetoothSerial.print("Photo 1: ");
-  // BluetoothSerial.println(photo1);
-  // BluetoothSerial.print("Photo 2: ");
-  // BluetoothSerial.println(photo2);
-  // BluetoothSerial.print("Photo 3: ");
-  // BluetoothSerial.println(photo3);
-  // BluetoothSerial.print("Photo 4: ");
-  // BluetoothSerial.println(photo4);
+  BluetoothSerial.print("Photo 1: ");
+  BluetoothSerial.println(photo1);
+  BluetoothSerial.print("Photo 2: ");
+  BluetoothSerial.println(photo2);
+  BluetoothSerial.print("Photo 3: ");
+  BluetoothSerial.println(photo3);
+  BluetoothSerial.print("Photo 4: ");
+  BluetoothSerial.println(photo4);
 
 
   //Updates boolean light value based of transistor threshold
