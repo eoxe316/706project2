@@ -465,9 +465,11 @@ void robot_move(){
             break;
         case TURN_LEFT:
             ccw();
+            Sunflower();
             break;
         case TURN_RIGHT:
             cw();
+            Sunflower();
             break;
         case FAN_ON:
             stop();
@@ -537,7 +539,7 @@ void ClosedLoopStraight(int speed_val)
 
     ki_straight_gyro += e;
 
-    double speed_in = constrain(speed_val, -(speed_val - (0.9*speed_val / 90) * abs(e)), (speed_val - (0.9*speed_val / 90) * abs(e)));
+    double speed_in = constrain(speed_val, -(speed_val - (speed_val / 90) * abs(e)), (speed_val - (speed_val / 90) * abs(e)));
     correction_val = constrain(correction_val_1, -(500 - speed_in), (500 - speed_in));
 
     left_font_motor.writeMicroseconds(1500 + speed_in - correction_val);
