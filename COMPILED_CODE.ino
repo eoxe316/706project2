@@ -257,7 +257,7 @@ void loop(void) //main loop
     };
     // Gyro();
     avgphototrans();
-    delay(10);
+    delay(20);
 }
 
 float photo_average = 0;
@@ -838,11 +838,13 @@ void filter_IR_reading(){
   LR1mm = constrain(LR1mm_reading, 0, 40);
   LR3mm = constrain(LR3mm_reading, 0, 40);
 
+  print_IR();
+
   conv_binary(MR1, MR1mm);
   conv_binary(MR2, MR2mm);
   conv_binary(LR1, LR1mm);
   conv_binary(LR3, LR3mm);
-  print_IR();
+  
 }
 
 double average_IR(double IR1, double IR2) {
@@ -869,26 +871,24 @@ void print_IR(){
   BluetoothSerial.print("LR3: ");
   BluetoothSerial.println(LR3mm);
 
+  // BluetoothSerial.print("VLADISLAV COLPMAN");
+
   // BluetoothSerial.print("LR1 RAW: ");
   // BluetoothSerial.print(LR1mm_reading);
   BluetoothSerial.print("LR1: ");
   BluetoothSerial.println(LR1mm);
 
+  // BluetoothSerial.print("ANDREW J. KOH"); // Not reaching??
+
   // BluetoothSerial.print("MR2 RAW: ");
   // BluetoothSerial.print(MR2mm_reading);
-  BluetoothSerial.print("MR2: ");
-  BluetoothSerial.println(MR2mm);
+  //BluetoothSerial.print("MR2: ");
+  //BluetoothSerial.println(MR2mm);
 
   // BluetoothSerial.print("MR1 RAW: ");
   // BluetoothSerial.print(MR1mm_reading);
-  BluetoothSerial.print(" MR1: ");
-  BluetoothSerial.println(MR1mm);
-
-
-
-
-
-
+  //BluetoothSerial.print(" MR1: ");
+  //BluetoothSerial.println(MR1mm);
 
   BluetoothSerial.print("Sonar ");
   BluetoothSerial.println(sonar_cm);
@@ -1012,10 +1012,10 @@ void conv_binary(IR_BINARY binary_type, double reading){
     threshold = 25;
   }
   else if (binary_type == LR3){
-    threshold = 20;
+    threshold = 32;
   }
   else if(binary_type == LR1){
-    threshold = 15;
+    threshold = 32;
   }
   else if(binary_type == MR2){
     threshold = 10;
