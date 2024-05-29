@@ -122,7 +122,7 @@ unsigned int IR_bin = 0b00000;
 //IR Kalman
 double MR1_var, MR2_var, LR1_var, LR3_var = 0;
 double sensor_noise_ir = 8;
-double process_noise_ir = 2;
+double process_noise_ir = 1;
 
 
 /***ULTRASONIC***/
@@ -333,6 +333,16 @@ STATE running() {
   put_out_fire();
   all_fires_extinguished();
   arbitrate();
+
+  //if puts out 1st fire
+  if(fires_put_out == 1){
+    return MOTHING;
+  }
+
+  //if all fires put out
+  if(stop_flag){
+    return STOPPED;
+  }
   
   return RUNNING;
 }
@@ -406,17 +416,28 @@ void avoid(){
 void put_out_fire(){
   //initial fire check
   float middle_avg = (photo2_avg+photo3_avg)/2;
-  if((middle_avg < 650) && (check_bits(SONAR) || check_bits(LR1) || check_bits(LR3))){
-    fire_flag = true;
-    fan_command = FAN_ON;
-    //if this is the first time its turning on the fan
-    if(digitalRead(fan_pin) == LOW){
+
+  if((digitalRead(fan_pin) == LOW) && (middle_avg < 300) && (check_bits(SONAR) || check_bits(LR1) || check_bits(LR3))){
+    // fire_count++;
+    // if (fire_count == 3){
+      fire_flag = true;
+      fan_command = FAN_ON;
+      BluetoothSerial.println("STARTED TIMER");
       fan_start_time = millis();    //start the 10s timer
-    }
+      digitalWrite(fan_pin, HIGH);
+      //if this is the first time its turning on the fan
+
+    // }
   //check if the fan is already on
   }else if(digitalRead(fan_pin) == HIGH){
     //if fire goes out or 10s elapsed
-    if(middle_avg > 800 || (millis() - fan_start_time >= 10000)){
+    // BluetoothSerial.println("PUTTING PUTTIN GPTIEADLJLAKSJDLASKJDLASKDJLASKDJLASKDLJSAJD");
+    if((middle_avg > 1200) || (millis() - fan_start_time >= 8000)){
+      //BluetoothSerial.println("Fire has been put out --------------------------");
+      //blocking code
+      digitalWrite(fan_pin, LOW);
+      cw();
+      delay(1000);
       fire_flag = false;
       fan_command = FAN_OFF;
       fires_put_out++;
@@ -477,7 +498,7 @@ void robot_move(){
             // fan_on();
             break;
         case FAN_OFF:
-            digitalWrite(fan_pin, HIGH);
+            digitalWrite(fan_pin, LOW);
             // fan_off();
             break;
         case STOP:
@@ -793,20 +814,20 @@ double read_IR(double coefficient, double power, double sensor_reading){
 
 void read_IR_sensors(){
   // BluetoothSerial.println("READ SENSOR START");
-  MR1mm_reading = constrain(read_IR(MR1coeff, MR1power, analogRead(MR1pin)), 0, 25);
-  MR2mm_reading = constrain(read_IR(MR2coeff, MR2power, analogRead(MR2pin)), 0, 25);
-  LR1mm_reading = constrain(read_IR(LR1coeff, LR1power, analogRead(LR1pin)), 0, 40);
-  LR3mm_reading = constrain(read_IR(LR3coeff, LR3power, analogRead(LR3pin)), 0, 40);
+  MR1mm_reading = read_IR(MR1coeff, MR1power, analogRead(MR1pin));
+  MR2mm_reading = read_IR(MR2coeff, MR2power, analogRead(MR2pin));
+  LR1mm_reading = read_IR(LR1coeff, LR1power, analogRead(LR1pin));
+  LR3mm_reading = read_IR(LR3coeff, LR3power, analogRead(LR3pin));
 }
 
 void filter_IR_reading(){
   //Average these to final value 
   double mrbuffer = 150;
   double lrbuffer = 500;
-  MR1mm = Kalman_IR(MR1mm_reading, MR1mm, &MR1_var);
-  MR2mm = Kalman_IR(MR2mm_reading, MR2mm, &MR2_var);
-  LR1mm = Kalman_IR(LR1mm_reading, LR1mm, &LR1_var);
-  LR3mm = Kalman_IR(LR3mm_reading, LR3mm, &LR3_var);
+  MR1mm = constrain(Kalman_IR(MR1mm_reading, MR1mm, &MR1_var), 0, 25);
+  MR2mm = constrain(Kalman_IR(MR2mm_reading, MR2mm, &MR2_var), 0, 25);
+  LR1mm = constrain(Kalman_IR(LR1mm_reading, LR1mm, &LR1_var), 0, 40);
+  LR3mm = constrain(Kalman_IR(LR3mm_reading, LR3mm, &LR3_var), 0, 40);
 
   conv_binary(MR1, MR1mm);
   conv_binary(MR2, MR2mm);
