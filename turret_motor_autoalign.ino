@@ -264,10 +264,10 @@ STATE initialising() {
   //Locate the light before beginning
   // locate_light();
 
-  for (int i = 0; i < 100; i++)
+  for (int i = 0; i < 50; i++)
   {
     avgphototrans();
-    delay(10);
+    delay(1);
   }
 
   return MOTHING;
@@ -277,17 +277,13 @@ float photo1_avg;
 float photo2_avg;
 float photo3_avg;
 float photo4_avg;
-
-float data[2][2] = {
-  {0,0},
-  {0,0}
-};
-
 int step_moth = 0;
 float finAngleServ = 0;
 
 float conv[3] = {1024, 1024, 1024};
 float prev_conv = 0;
+float prev_grad = 0;
+float conv_avg = 9300;
 
 STATE Mothing()
 {
@@ -299,27 +295,28 @@ STATE Mothing()
 
       ccw();
 
-      BluetoothSerial.println(photo2_avg + photo3_avg);
+      float convsum = (0.1*photo1_avg + 100*photo2_avg - 100*photo3_avg - 0.1*photo4_avg + 5*conv_avg) / (5 + 1);
 
-      float sum = (photo2_avg + photo3_avg) / 2;
+      conv_avg = (conv_avg + convsum) / 2;
 
-      float convsum = 100*sum - 100*conv[2];
-      
-      conv[2] = conv[1];
-      conv[1] = conv[0];
-      conv[0] = sum;
+      float grad = (((convsum - prev_conv) / 2) + prev_grad) / 2;
 
-      if ((prev_conv < 0) && (abs(convsum - prev_conv) > 100))
+      if ( prev_grad < -1.8 && grad > prev_grad)
       {
         stop();
-        mothing_state = FINDING;
-        break;
+        BluetoothSerial.println("Stop Now");
+        // mothing_state = ROBOTO_TURNING;
+        // break;
+
+        delay(1000);
       }
 
       prev_conv = convsum;
+      prev_grad = grad;
 
-      BluetoothSerial.print("Convolution output: ");
-      BluetoothSerial.println(convsum);
+      BluetoothSerial.print("Grad output: ");
+      BluetoothSerial.println(grad);
+      BluetoothSerial.println(grad - prev_grad);
 
       
     break;
