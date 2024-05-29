@@ -56,12 +56,6 @@ enum IR_BINARY{
   SONAR
 };
 
-enum MOTHINGO{
-  SERVO_TURNING,
-  ROBOTO_TURNING,
-  FINDING
-};
-
 
 /*********FUNCTION FLAGS AND OUTPUTS*********/
 MOTION forward_command;
@@ -254,66 +248,54 @@ void loop(void) //main loop
         break;
       case RUNNING:
         machine_state = running();
+        Sonar();
+        conv_binary(SONAR, sonar_cm);
         break;
       case STOPPED: //Stop of Lipo Battery voltage is too low, to protect Battery
         machine_state = stopped();
         break;
     };
-    Sonar();
-    conv_binary(SONAR, sonar_cm);
-    Gyro();
+    // Gyro();
     avgphototrans();
     delay(10);
 }
+
+float photo_average = 0;
 
 STATE initialising() {
   BluetoothSerial.println("INITIALISING....");
 
   enable_motors();
-
-  double sum1 = 0;
-  for (int i = 0; i < 200; i++)
-  { // read 100 values of voltage when gyro is at still, to calculate the zero-drift.
-    gyroVal = analogRead(gyroPin);
-    // gyroVal = constrain(analogRead(gyroPin), 500, 530);
-    delay(10);
-    sum1 += gyroVal;
-    // BluetoothSerial.println(gyroVal);
-  }
-  gyroZeroVoltage = sum1 / 200; // average the sum as the zero drifting
-
   SonarCheck(90); //Initialise sonar values
   initialise_IR();
   initialise_transistors();
 
-  for (int i = 0; i < 10; i++)
+  for (int i = 0; i < 150; i++)
   {
     avgphototrans();
-    delay(10);
+    delay(1);
   }
-  turret_motor.write(0);
-  currentAngle = 0;
 
   BluetoothSerial.println("initialise complete");
   return MOTHING;
 }
 
-float photo1_avg;
-float photo2_avg;
-float photo3_avg;
-float photo4_avg;
+
 int step_moth = 0;
 float finAngleServ = 0;
 
-float conv[3] = {1024, 1024, 1024};
 float prev_conv = 0;
 float prev_grad = 0;
 float conv_avg = 9300;
+
+float w = 100;
 
 STATE Mothing()
 {
 
   ccw();
+
+  w = 100;
 
   float convsum = (0.1*photo1_avg + 100*photo2_avg - 100*photo3_avg - 0.1*photo4_avg + 5*conv_avg) / (5 + 1);
 
@@ -327,6 +309,8 @@ STATE Mothing()
     BluetoothSerial.println("Stop Now");
     conv_avg = 6000;
     return RUNNING;
+
+    // delay(1000);
   }
 
   prev_conv = convsum;
@@ -507,9 +491,10 @@ void Sunflower()
 {
 
   float k = 0.005;
-  float w = 0;
+  float w2 = 0;
+  w = 0;
 
-  float convsum = (10*photo1 + 1*photo2 - 1*photo3 - 10*photo4 + w*conv_avg) / (w + 1);
+  float convsum = (10*photo1 + 1*photo2 - 1*photo3 - 10*photo4 + w2*conv_avg) / (w2 + 1);
 
   conv_avg = (conv_avg + convsum) / 2;
 
@@ -791,7 +776,7 @@ int iterations = 20;
   MR2mm = MR2sum/iterations;
   LR1mm = LR1sum/iterations;
   LR3mm = LR3sum/iterations;
-  print_IR();
+  // print_IR();
 }
 
 double read_IR(double coefficient, double power, double sensor_reading){
@@ -821,7 +806,7 @@ void filter_IR_reading(){
   conv_binary(MR2, MR2mm);
   conv_binary(LR1, LR1mm);
   conv_binary(LR3, LR3mm);
-  print_IR();
+  // print_IR();
 }
 
 double average_IR(double IR1, double IR2) {
@@ -883,19 +868,14 @@ void read_transistors(){
   photo_reading4 = analogRead(photo_pin4);
 }
 
-double pht1_avg = 0;
-double pht2_avg = 0;
-double pht3_avg = 0;
-double pht4_avg = 0;
-
-double w = 15;
-
+double pht1_avg = 1024;
+double pht2_avg = 1024;
+double pht3_avg = 1024;
+double pht4_avg = 1024;
 
 void update_transistors(){ 
   //Updates transistor state based on transistor readings
   read_transistors();
-
-  w = 0;
 
   // double photo_wgt2 = 1.02;
   // double photo_wgt3 = 0.93;
@@ -903,9 +883,9 @@ void update_transistors(){
 
   //Filters transistor values
   photo1 = (photo_reading1 + (w * pht1_avg)) / (w + 1);
-  photo2 = (photo_reading2 + (w * pht2_avg)) / (w + 1);
-  photo3 = (photo_reading3 + (w * pht3_avg)) / (w + 1);
-  photo4 = (photo_reading4 + (w * pht4_avg)) / (w + 1);
+  photo2 = (1.02 * photo_reading2 + (w * pht2_avg)) / (w + 1);
+  photo3 = (0.93 * photo_reading3 + (w * pht3_avg)) / (w + 1);
+  photo4 = (0.92 * photo_reading4 + (w * pht4_avg)) / (w + 1);
 
   pht1_avg = (pht1_avg + photo1) / 2;
   pht2_avg = (pht2_avg + photo2) / 2;
@@ -913,10 +893,10 @@ void update_transistors(){
   pht4_avg = (pht4_avg + photo4) / 2;
 
   //Updates boolean light value based of transistor threshold
-  photo_light1 = transistor_on(photo1, photo_thresh1);
-  photo_light2 = transistor_on(photo2, photo_thresh2);
-  photo_light3 = transistor_on(photo3, photo_thresh3);
-  photo_light4 = transistor_on(photo4, photo_thresh4);
+  // photo_light1 = transistor_on(photo1, photo_thresh1);
+  // photo_light2 = transistor_on(photo2, photo_thresh2);
+  // photo_light3 = transistor_on(photo3, photo_thresh3);
+  // photo_light4 = transistor_on(photo4, photo_thresh4);
   // transistors_print();
 }
 
