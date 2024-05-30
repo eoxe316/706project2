@@ -284,6 +284,7 @@ float conv[3] = {1024, 1024, 1024};
 float prev_conv = 0;
 float prev_grad = 0;
 float conv_avg = 9300;
+float w =100;
 
 STATE Mothing()
 {
@@ -301,6 +302,7 @@ STATE Mothing()
     stop();
     BluetoothSerial.println("Stop Now");
     conv_avg = 6000;
+    w = 0;
     return RUNNING;
   }
 
@@ -348,8 +350,8 @@ STATE running() {
   read_IR_sensors();
   filter_IR_reading();
 
-  Sunflower();
-  // ClosedLoopStraight(200);
+  ClosedLoopStrafe(300);
+  
 
 
 //   move_forward();
@@ -364,9 +366,9 @@ void Sunflower()
 {
 
   float k = 0.005;
-  float w = 0;
+  float w2 = 0;
 
-  float convsum = (10*photo1 + 1*photo2 - 1*photo3 - 10*photo4 + w*conv_avg) / (w + 1);
+  float convsum = (10*photo1 + 1*photo2 - 1*photo3 - 10*photo4 + w2*conv_avg) / (w2 + 1);
 
   conv_avg = (conv_avg + convsum) / 2;
 
@@ -563,22 +565,56 @@ void ClosedLoopStraight(int speed_val)
 
 void ClosedLoopStrafe(int speed_val)
 {
-    double e_gyro, e_ir, correction_val_gyro = 0, correction_val_ir = 0;
-    double kp_gyro = 25;
-    double ki_gyro = 5;
+    // double e_gyro, e_ir, correction_val_gyro = 0, correction_val_ir = 0;
+    // double kp_gyro = 25;
+    // double ki_gyro = 5;
 
-    //double kp_ir = 0;
-    //double ki_ir = 0;
-    (abs(gyroAngleChange) < 3) ? e_gyro = gyroAngleChange : e_gyro = 0;
+    // //double kp_ir = 0;
+    // //double ki_ir = 0;
+    // (abs(gyroAngleChange) < 3) ? e_gyro = gyroAngleChange : e_gyro = 0;
 
-    correction_val_gyro = constrain(kp_gyro * e_gyro + ki_gyro * ki_strafe_gyro, -CONTROL_CONSTRAINT_GYRO, CONTROL_CONSTRAINT_GYRO);
+    // correction_val_gyro = constrain(kp_gyro * e_gyro + ki_gyro * ki_strafe_gyro, -CONTROL_CONSTRAINT_GYRO, CONTROL_CONSTRAINT_GYRO);
     
-    ki_strafe_gyro += e_gyro;
+    // ki_strafe_gyro += e_gyro;
 
-    left_font_motor.writeMicroseconds(1500 + speed_val - correction_val_gyro - correction_val_ir);
-    left_rear_motor.writeMicroseconds(1500 - speed_val - correction_val_gyro - correction_val_ir);
-    right_rear_motor.writeMicroseconds(1500 - speed_val - correction_val_gyro + correction_val_ir);
-    right_font_motor.writeMicroseconds(1500 + speed_val - correction_val_gyro + correction_val_ir);
+    // left_font_motor.writeMicroseconds(1500 + speed_val - correction_val_gyro );
+    // left_rear_motor.writeMicroseconds(1500 - speed_val - correction_val_gyro);
+    // right_rear_motor.writeMicroseconds(1500 - speed_val - correction_val_gyro);
+    // right_font_motor.writeMicroseconds(1500 + speed_val - correction_val_gyro);
+
+    // double e, correction_val;
+
+    // double kp_gyro = 5;
+    // double ki_gyro = 0;
+
+    // BluetoothSerial.print("CURRENT SERVO ANGLE: ");
+    // BluetoothSerial.println(currentAngle);
+    double e, correction_val;
+
+    double kp_gyro = 5;
+    double ki_gyro = 0;
+
+    e = (currentAngle - 90);
+
+    double correction_val_1 = kp_gyro * e + ki_gyro * ki_straight_gyro;
+
+    // correction_val = constrain(correction_val_1, -(500 - speed_val), (500 - speed_val));
+    BluetoothSerial.print("CURRENT SERVO ANGLE: ");
+    BluetoothSerial.println(currentAngle);
+    BluetoothSerial.print("CORRECTION VAL ");
+    BluetoothSerial.println(correction_val);
+
+    ki_straight_gyro += e;
+
+    double speed_in = constrain(speed_val, -(speed_val - (speed_val / 90) * abs(e)), (speed_val - (speed_val / 90) * abs(e)));
+    correction_val = constrain(correction_val_1, -(500 - speed_in), (500 - speed_in));
+
+    left_font_motor.writeMicroseconds(1500 + speed_in - correction_val);
+    left_rear_motor.writeMicroseconds(1500 - speed_in - correction_val);
+    right_rear_motor.writeMicroseconds(1500 - speed_in - correction_val);
+    right_font_motor.writeMicroseconds(1500 + speed_in - correction_val);
+
+    Sunflower();
 }
 
 double ClosedLoopTurn(double speed, double target_angle)
@@ -848,14 +884,10 @@ double pht2_avg = 1024;
 double pht3_avg = 1024;
 double pht4_avg = 1024;
 
-double w = 100;
-
 
 void update_transistors(){ 
   //Updates transistor state based on transistor readings
   read_transistors();
-
-  w = 2;
 
   //Filters transistor values
   // photo1 = Poly(photo_reading1, -0.000008, 0.0037, -0.659, 50.851, -501.98);
