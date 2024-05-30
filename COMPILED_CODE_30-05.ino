@@ -195,6 +195,20 @@ int fan_timer;
 
 double last_turn_time = millis();
 
+
+double pht1_avg = 1024;
+double pht2_avg = 1024;
+double pht3_avg = 1024;
+double pht4_avg = 1024;
+float w = 100;
+
+int step_moth = 0;
+float finAngleServ = 0;
+
+float prev_conv = 0;
+float prev_grad = 0;
+float conv_avg = 9300;
+
 void setup(void)
 {
   BluetoothSerial.begin(115200);
@@ -242,13 +256,18 @@ void loop(void) //main loop
     static STATE machine_state = INITIALISING;
     switch (machine_state) {
       case INITIALISING:
+        w = 100;
         machine_state = initialising();
         break;
       case MOTHING:
         machine_state = Mothing();
+        w = 100;
+        avgphototrans();
         break;
       case RUNNING:
         machine_state = running();
+        w = 0;
+        avgphototrans();
         Sonar();
         conv_binary(SONAR, sonar_cm);
         break;
@@ -256,8 +275,9 @@ void loop(void) //main loop
         machine_state = stopped();
         break;
     };
-    // Gyro();
-    avgphototrans();
+
+    BluetoothSerial.print("W: ");
+    BluetoothSerial.println(w);
     delay(20);
 }
 
@@ -280,22 +300,10 @@ STATE initialising() {
   return MOTHING;
 }
 
-
-int step_moth = 0;
-float finAngleServ = 0;
-
-float prev_conv = 0;
-float prev_grad = 0;
-float conv_avg = 9300;
-
-float w = 100;
-
 STATE Mothing()
 {
 
   ccw();
-
-  w = 100;
 
   float convsum = (0.1*photo1_avg + 102*photo2_avg - 93*photo3_avg - 0.092*photo4_avg + 5*conv_avg) / (5 + 1);
 
@@ -341,7 +349,20 @@ STATE running() {
 
   //if puts out 1st fire
   if(fires_put_out == 1){
-    w = 100;
+    reverse();
+    turret_motor.write(90);
+    for (int i = 0; i < 4; i++)
+    {
+     avgphototrans(); 
+    }
+      
+    conv_avg = 9600;
+    prev_conv = 0;
+    prev_grad = 0;
+    pht1_avg = 1024;
+    pht2_avg = 1024;
+    pht3_avg = 1024;
+    pht4_avg = 1024;
     return MOTHING;
   }
 
@@ -405,14 +426,15 @@ void avoid(){
   // }
 
   float middle_avg = (photo2_avg+photo3_avg)/2;
-  if((!check_bits(LR1) && !check_bits(LR3) && !check_bits(SONAR)) || middle_avg < 400){
+  if((!check_bits(LR1) && !check_bits(LR3) && !check_bits(SONAR)) || middle_avg < 500){
     BluetoothSerial.println("NO AVOID REQUIRED");
     avoid_flag = false;
     avoid_command = NULL;
-  }else if(check_bits(MR1) && check_bits(MR2)){
+  }  
+  else if(check_bits(MR1) && check_bits(MR2)){
     avoid_flag = true;
     avoid_command = TURN_RIGHT;
-  }else if(check_bits(MR1) || (!check_bits(LR3) && check_bits(LR1)) || (currentAngle < 80 && avoid_command == NULL)){ //!check_bits(MR2) && 
+  }else if((check_bits(MR1) || (!check_bits(LR3) && check_bits(LR1)) || (currentAngle < 70)) && avoid_command == NULL){ //!check_bits(MR2) && 
     avoid_flag = true;
     avoid_command = TURN_RIGHT;
   }else if (avoid_command != TURN_RIGHT){
@@ -425,7 +447,7 @@ void put_out_fire(){
   //initial fire check
   float middle_avg = (photo2_avg+photo3_avg)/2;
 
-  if((digitalRead(fan_pin) == LOW) && (middle_avg < 200) && (check_bits(SONAR) || check_bits(LR1) || check_bits(LR3))){
+  if((digitalRead(fan_pin) == LOW) && (middle_avg < 300) && (check_bits(SONAR) || check_bits(LR1) || check_bits(LR3))){
     // fire_count++;
     // if (fire_count == 3){
       fire_flag = true;
@@ -440,31 +462,16 @@ void put_out_fire(){
   }else if(digitalRead(fan_pin) == HIGH){
     //if fire goes out or 10s elapsed
     // BluetoothSerial.println("PUTTING PUTTIN GPTIEADLJLAKSJDLASKJDLASKDJLASKDJLASKDLJSAJD");
-    if(((middle_avg > 1000) || (millis() - fan_start_time >= 8000)) && ((millis() - fan_start_time) >= 2000)){
+    if((middle_avg > 1000)  && ((millis() - fan_start_time) >= 2000)){
       //BluetoothSerial.println("Fire has been put out --------------------------");
       //blocking code
       digitalWrite(fan_pin, LOW);
-      ccw();
-      turret_motor.write(90);
-      conv_avg = 9600;
-
-      for (int i = 0; i < 50; i++)
-      {
-        w = 100;
-        avgphototrans();
-      }
 
       fire_flag = false;
       fan_command = FAN_OFF;
       fires_put_out++;
     }
   }
-  //if nothing
-  // }else if (millis() - fan_start_time > 2000)
-  // {
-  //   fire_flag = false;
-  //   fan_command = FAN_OFF;
-  // }
 }
 
 void all_fires_extinguished(){
@@ -500,18 +507,15 @@ void arbitrate(){
 void robot_move(){
     switch (motor_input){
         case FORWARD:
-            ClosedLoopStraight(350);
-            w = 0;
+            ClosedLoopStraight(200);
             break;
         case TURN_LEFT:
             ccw();
             last_turn_time = millis();
-            w = 0;
             break;
         case TURN_RIGHT:
             cw();
             last_turn_time = millis();
-            w = 0;
             break;
         case FAN_ON:
             stop();
@@ -519,8 +523,8 @@ void robot_move(){
             // fan_on();
             break;
         case FAN_OFF:
+            stop();
             digitalWrite(fan_pin, LOW);
-            w = 100;
             // fan_off();
             break;
         case STOP:
@@ -537,16 +541,15 @@ void Sunflower()
 {
 
   float k = 0.005;
-  float w2 = 0;
-  float convsum = (10*photo1 + 1*photo2 - 1*photo3 - 10*photo4 + w2*conv_avg) / (w2 + 1);
 
+  float convsum = 10*photo1 + 1*photo2 - 1*photo3 - 10*photo4;
   conv_avg = (conv_avg + convsum) / 2;
 
   currentAngle = constrain(currentAngle - k * convsum, 0, 180);
   
   if (abs(currentAngle - oldAngle) > 0.5) 
   {
-    turret_motor.write(currentAngle);
+    turret_motor.write(currentAngle); 
   }
 
   oldAngle = currentAngle;
@@ -562,7 +565,7 @@ void Sunflower()
 /*******************CONTROL LOOPS**********************/
 void ClosedLoopStraight(int speed_val_1)
 {
-    double e, correction_val;
+    double e, correction_val, speed_in;
 
     double kp_gyro = 5;
     double ki_gyro = 0;
@@ -572,7 +575,7 @@ void ClosedLoopStraight(int speed_val_1)
 
     e = (currentAngle - 90);
 
-    double correction_val_1 = kp_gyro * e + ki_gyro * ki_straight_gyro, speed_in;
+    double correction_val_1 = kp_gyro * e + ki_gyro * ki_straight_gyro;
 
     // correction_val = constrain(correction_val_1, -(500 - speed_val), (500 - speed_val));
     // BluetoothSerial.print("CURRENT SERVO ANGLE: ");
@@ -582,7 +585,7 @@ void ClosedLoopStraight(int speed_val_1)
 
     ki_straight_gyro += e;
 
-    if (millis() - last_turn_time < 2500)
+    if (millis() - last_turn_time < 1000)
     {
       speed_in = constrain(speed_val_1, -(speed_val_1 - (0.5*speed_val_1 / 90) * abs(e)), (speed_val_1 - (0.5*speed_val_1 / 90) * abs(e))); 
     } else {
@@ -592,7 +595,7 @@ void ClosedLoopStraight(int speed_val_1)
     correction_val = constrain(correction_val_1, -(500 - speed_in), (500 - speed_in));
 
 
-    if (millis() - last_turn_time < 1500){
+    if (millis() - last_turn_time < 1000){
       correction_val = 0;
       speed_in = speed_val_1;
     }
@@ -915,11 +918,6 @@ void read_transistors(){
   photo_reading4 = analogRead(photo_pin4);
 }
 
-double pht1_avg = 1024;
-double pht2_avg = 1024;
-double pht3_avg = 1024;
-double pht4_avg = 1024;
-
 void update_transistors(){ 
   //Updates transistor state based on transistor readings
   read_transistors();
@@ -1023,10 +1021,10 @@ void conv_binary(IR_BINARY binary_type, double reading){
     threshold = 15;
   }
   else if (binary_type == LR3){
-    threshold = 15;
+    threshold = 12;
   }
   else if(binary_type == LR1){
-    threshold = 15;
+    threshold = 12;
   }
   else if(binary_type == MR2){
     threshold = 10;
