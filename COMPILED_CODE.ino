@@ -193,6 +193,7 @@ double photo_thresh4 = 1000;
 /******FAN SETUP******/
 int fan_timer;
 
+double last_turn_time = millis();
 
 void setup(void)
 {
@@ -270,7 +271,7 @@ STATE initialising() {
   initialise_IR();
   initialise_transistors();
 
-  for (int i = 0; i < 150; i++)
+  for (int i = 0; i < 100; i++)
   {
     avgphototrans();
     delay(1);
@@ -341,6 +342,8 @@ STATE running() {
 
   //if puts out 1st fire
   if(fires_put_out == 1){
+    turret_motor.write(90);
+    w = 100;
     return MOTHING;
   }
 
@@ -395,24 +398,26 @@ void move_forward(){
 }
 
 void avoid(){
-  BluetoothSerial.println(IR_bin);
-  for (int i = 0; i <= 4; i++){
-    BluetoothSerial.print("BIT POS");
-    BluetoothSerial.print(i);
-    BluetoothSerial.print(" READING ");
-    BluetoothSerial.println(bitRead(IR_bin, i));
-  }
+  // BluetoothSerial.println(IR_bin);
+  // for (int i = 0; i <= 4; i++){
+  //   BluetoothSerial.print("BIT POS");
+  //   BluetoothSerial.print(i);
+  //   BluetoothSerial.print(" READING ");
+  //   BluetoothSerial.println(bitRead(IR_bin, i));
+  // }
 
-  if(!check_bits(LR1) && !check_bits(LR3) && !check_bits(SONAR)){
+  float middle_avg = (photo2_avg+photo3_avg)/2;
+  if((!check_bits(LR1) && !check_bits(LR3) && !check_bits(SONAR)) || middle_avg < 400){
     BluetoothSerial.println("NO AVOID REQUIRED");
     avoid_flag = false;
+    avoid_command = NULL;
   }else if(check_bits(MR1) && check_bits(MR2)){
     avoid_flag = true;
     avoid_command = TURN_RIGHT;
-  }else if(check_bits(MR1) || (!check_bits(MR2) && check_bits(LR1))){
+  }else if(check_bits(MR1) || (!check_bits(LR3) && check_bits(LR1)) || (currentAngle < 70 && avoid_command == NULL)){ //!check_bits(MR2) && 
     avoid_flag = true;
     avoid_command = TURN_RIGHT;
-  }else{
+  }else if (avoid_command != TURN_RIGHT){
     avoid_flag = true;
     avoid_command = TURN_LEFT;
   }
@@ -422,7 +427,7 @@ void put_out_fire(){
   //initial fire check
   float middle_avg = (photo2_avg+photo3_avg)/2;
 
-  if((digitalRead(fan_pin) == LOW) && (middle_avg < 300) && (check_bits(SONAR) || check_bits(LR1) || check_bits(LR3))){
+  if((digitalRead(fan_pin) == LOW) && (middle_avg < 200) && (check_bits(SONAR) || check_bits(LR1) || check_bits(LR3))){
     // fire_count++;
     // if (fire_count == 3){
       fire_flag = true;
@@ -437,18 +442,24 @@ void put_out_fire(){
   }else if(digitalRead(fan_pin) == HIGH){
     //if fire goes out or 10s elapsed
     // BluetoothSerial.println("PUTTING PUTTIN GPTIEADLJLAKSJDLASKJDLASKDJLASKDJLASKDLJSAJD");
-    if((middle_avg > 1200) || (millis() - fan_start_time >= 8000)){
+    if(((middle_avg > 1000) || (millis() - fan_start_time >= 8000)) && (millis() - fan_start_time > 2000) ){
       //BluetoothSerial.println("Fire has been put out --------------------------");
       //blocking code
       digitalWrite(fan_pin, LOW);
       ccw();
-      delay(500);
+
+      for (int i = 0; i < 20; i++)
+      {
+        avgphototrans();
+      }
+
       fire_flag = false;
       fan_command = FAN_OFF;
       fires_put_out++;
     }
   //if nothing
-  }else{
+  }else if (millis() - fan_start_time > 2000)
+  {
     fire_flag = false;
     fan_command = FAN_OFF;
   }
@@ -487,29 +498,36 @@ void arbitrate(){
 void robot_move(){
     switch (motor_input){
         case FORWARD:
-            ClosedLoopStraight(500);
+            ClosedLoopStraight(350);
+            w = 0;
             break;
         case TURN_LEFT:
             ccw();
-            Sunflower();
+            last_turn_time = millis();
+            w = 0;
             break;
         case TURN_RIGHT:
             cw();
-            Sunflower();
+            last_turn_time = millis();
+            w = 0;
             break;
         case FAN_ON:
             stop();
             digitalWrite(fan_pin, HIGH);
+            w = 100;
             // fan_on();
             break;
         case FAN_OFF:
             digitalWrite(fan_pin, LOW);
+            w = 100;
             // fan_off();
             break;
         case STOP:
             stop();
             break;
     }
+
+    Sunflower();
 }
 
 float oldAngle = 0;
@@ -519,8 +537,6 @@ void Sunflower()
 
   float k = 0.005;
   float w2 = 0;
-  w = 0;
-
   float convsum = (10*photo1 + 1*photo2 - 1*photo3 - 10*photo4 + w2*conv_avg) / (w2 + 1);
 
   conv_avg = (conv_avg + convsum) / 2;
@@ -543,37 +559,49 @@ void Sunflower()
 }
 
 /*******************CONTROL LOOPS**********************/
-void ClosedLoopStraight(int speed_val)
+void ClosedLoopStraight(int speed_val_1)
 {
     double e, correction_val;
 
     double kp_gyro = 5;
     double ki_gyro = 0;
 
-    BluetoothSerial.print("CURRENT SERVO ANGLE: ");
-    BluetoothSerial.println(currentAngle);
+    // BluetoothSerial.print("CURRENT SERVO ANGLE: ");
+    // BluetoothSerial.println(currentAngle);
 
     e = (currentAngle - 90);
 
-    double correction_val_1 = kp_gyro * e + ki_gyro * ki_straight_gyro;
+    double correction_val_1 = kp_gyro * e + ki_gyro * ki_straight_gyro, speed_in;
 
     // correction_val = constrain(correction_val_1, -(500 - speed_val), (500 - speed_val));
-    BluetoothSerial.print("CURRENT SERVO ANGLE: ");
-    BluetoothSerial.println(currentAngle);
-    BluetoothSerial.print("CORRECTION VAL ");
-    BluetoothSerial.println(correction_val);
+    // BluetoothSerial.print("CURRENT SERVO ANGLE: ");
+    // BluetoothSerial.println(currentAngle);
+    // BluetoothSerial.print("CORRECTION VAL ");
+    // BluetoothSerial.println(correction_val);
 
     ki_straight_gyro += e;
 
-    double speed_in = constrain(speed_val, -(speed_val - (speed_val / 90) * abs(e)), (speed_val - (speed_val / 90) * abs(e)));
+    if (millis() - last_turn_time < 2500)
+    {
+      speed_in = constrain(speed_val_1, -(speed_val_1 - (0.5*speed_val_1 / 90) * abs(e)), (speed_val_1 - (0.5*speed_val_1 / 90) * abs(e))); 
+    } else {
+      speed_in = constrain(speed_val_1, -(speed_val_1 - (speed_val_1 / 90) * abs(e)), (speed_val_1 - (speed_val_1 / 90) * abs(e)));
+    }
+    
     correction_val = constrain(correction_val_1, -(500 - speed_in), (500 - speed_in));
+
+
+    if (millis() - last_turn_time < 1500){
+      correction_val = 0;
+      speed_in = speed_val_1;
+    }
 
     left_font_motor.writeMicroseconds(1500 + speed_in - correction_val);
     left_rear_motor.writeMicroseconds(1500 + speed_in - correction_val);
     right_rear_motor.writeMicroseconds(1500 - speed_in - correction_val);
     right_font_motor.writeMicroseconds(1500 - speed_in - correction_val);
 
-    Sunflower();
+    // Sunflower();
 }
 
 
@@ -614,10 +642,10 @@ double ClosedLoopTurn(double speed, double target_angle)
   right_rear_motor.writeMicroseconds(1500 + correction_val);
   right_font_motor.writeMicroseconds(1500 + correction_val);
 
-  BluetoothSerial.print("Current Error: ");
-  BluetoothSerial.println(e);
-  BluetoothSerial.print("Gyro aim: ");
-  BluetoothSerial.println(target_angle);
+  // BluetoothSerial.print("Current Error: ");
+  // BluetoothSerial.println(e);
+  // BluetoothSerial.print("Gyro aim: ");
+  // BluetoothSerial.println(target_angle);
   return e;
 }
 
@@ -747,7 +775,8 @@ void Sonar()
     cm = pulse_width / 58.0;
 
     
-    (sonar_cm == 0 ? sonar_cm = cm : sonar_cm = KalmanSonar(cm));
+    // (sonar_cm == 0 ? sonar_cm = cm : sonar_cm = KalmanSonar(cm));
+    sonar_cm = cm;
 
     // BluetoothSerial.print("Raw Sonar Reading");
     // BluetoothSerial.println(cm);
@@ -865,30 +894,11 @@ double Kalman_IR(double rawdata, double prev_val_ir, double* last_var_ir){   // 
 }
 
 void print_IR(){
+  // BluetoothSerial.print("LR3: ");
+  // BluetoothSerial.println(LR3mm);
 
-  // BluetoothSerial.print("LR3 RAW: ");
-  // BluetoothSerial.print(LR3mm_reading);
-  BluetoothSerial.print("LR3: ");
-  BluetoothSerial.println(LR3mm);
-
-  // BluetoothSerial.print("VLADISLAV COLPMAN");
-
-  // BluetoothSerial.print("LR1 RAW: ");
-  // BluetoothSerial.print(LR1mm_reading);
-  BluetoothSerial.print("LR1: ");
-  BluetoothSerial.println(LR1mm);
-
-  // BluetoothSerial.print("ANDREW J. KOH"); // Not reaching??
-
-  // BluetoothSerial.print("MR2 RAW: ");
-  // BluetoothSerial.print(MR2mm_reading);
-  //BluetoothSerial.print("MR2: ");
-  //BluetoothSerial.println(MR2mm);
-
-  // BluetoothSerial.print("MR1 RAW: ");
-  // BluetoothSerial.print(MR1mm_reading);
-  //BluetoothSerial.print(" MR1: ");
-  //BluetoothSerial.println(MR1mm);
+  // BluetoothSerial.print("LR1: ");
+  // BluetoothSerial.println(LR1mm);
 
   BluetoothSerial.print("Sonar ");
   BluetoothSerial.println(sonar_cm);
@@ -1009,13 +1019,13 @@ void conv_binary(IR_BINARY binary_type, double reading){
   double threshold = 10;
   //If no MR change to other relevaant threshold
   if(binary_type == SONAR){
-    threshold = 25;
+    threshold = 15;
   }
   else if (binary_type == LR3){
-    threshold = 32;
+    threshold = 20;
   }
   else if(binary_type == LR1){
-    threshold = 32;
+    threshold = 20;
   }
   else if(binary_type == MR2){
     threshold = 10;
