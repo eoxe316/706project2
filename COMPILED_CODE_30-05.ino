@@ -447,7 +447,7 @@ void put_out_fire(){
   //initial fire check
   float middle_avg = (photo2_avg+photo3_avg)/2;
 
-  if((digitalRead(fan_pin) == LOW) && (middle_avg < 300) && (check_bits(SONAR) || check_bits(LR1) || check_bits(LR3))){
+  if((digitalRead(fan_pin) == LOW) && (middle_avg < 400) && (sonar_cm < 10  || check_bits(LR1) || check_bits(LR3))){
     // fire_count++;
     // if (fire_count == 3){
       fire_flag = true;
@@ -523,14 +523,14 @@ void robot_move(){
         case FAN_ON:
             stop();
             digitalWrite(fan_pin, HIGH);
-            k = 0.005;
+            k = 0.002;
             ClosedLoopStraight(0);
             // fan_on();
             break;
         case FAN_OFF:
             stop();
             digitalWrite(fan_pin, LOW);
-            k = 0.005;
+            k = 0.002;
             ClosedLoopStraight(0);
             // fan_off();
             break;
@@ -1027,10 +1027,10 @@ void conv_binary(IR_BINARY binary_type, double reading){
     threshold = 15;
   }
   else if (binary_type == LR3){
-    threshold = 12;
+    threshold = 9;
   }
   else if(binary_type == LR1){
-    threshold = 12;
+    threshold = 9;
   }
   else if(binary_type == MR2){
     threshold = 10;
