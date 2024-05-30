@@ -503,10 +503,13 @@ void arbitrate(){
     robot_move();
 }
 
+float k = 0.005;
+
 //SOMEONE CHANGE THESE DELAYS
 void robot_move(){
     switch (motor_input){
         case FORWARD:
+            k = 0.01;
             ClosedLoopStraight(200);
             break;
         case TURN_LEFT:
@@ -520,11 +523,15 @@ void robot_move(){
         case FAN_ON:
             stop();
             digitalWrite(fan_pin, HIGH);
+            k = 0.005;
+            ClosedLoopStraight(0);
             // fan_on();
             break;
         case FAN_OFF:
             stop();
             digitalWrite(fan_pin, LOW);
+            k = 0.005;
+            ClosedLoopStraight(0);
             // fan_off();
             break;
         case STOP:
@@ -540,14 +547,13 @@ float oldAngle = 0;
 void Sunflower()
 {
 
-  float k = 0.005;
+  // float k = 0.005;
 
   float convsum = 10*photo1 + 1*photo2 - 1*photo3 - 10*photo4;
-  conv_avg = (conv_avg + convsum) / 2;
 
   currentAngle = constrain(currentAngle - k * convsum, 0, 180);
   
-  if (abs(currentAngle - oldAngle) > 0.5) 
+  if (abs(currentAngle - oldAngle) > 0.25) 
   {
     turret_motor.write(currentAngle); 
   }
