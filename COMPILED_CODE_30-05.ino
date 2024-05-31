@@ -426,7 +426,7 @@ void avoid(){
   // }
 
   float middle_avg = (photo2_avg+photo3_avg)/2;
-  if((!check_bits(LR1) && !check_bits(LR3) && !check_bits(SONAR)) || middle_avg < 600){
+  if((!check_bits(LR1) && !check_bits(LR3) && !check_bits(SONAR)) || middle_avg < 700){
     BluetoothSerial.println("NO AVOID REQUIRED");
     avoid_flag = false;
     avoid_command = NULL;
@@ -447,7 +447,7 @@ void put_out_fire(){
   //initial fire check
   float middle_avg = (photo2_avg+photo3_avg)/2;
 
-  if((digitalRead(fan_pin) == LOW) && (middle_avg < 400) && (sonar_cm < 10  || check_bits(LR1) || check_bits(LR3))){
+  if((digitalRead(fan_pin) == LOW) && (middle_avg < 400) && (check_bits(SONAR)  || check_bits(LR1) || check_bits(LR3))){
     // fire_count++;
     // if (fire_count == 3){
       fire_flag = true;
@@ -1023,14 +1023,16 @@ void conv_binary(IR_BINARY binary_type, double reading){
   //Default to MR threshold
   double threshold = 10;
   //If no MR change to other relevaant threshold
+  float middle_avg = (photo2_avg+photo3_avg)/2;
+
   if(binary_type == SONAR){
-    threshold = 15;
+    threshold = (middle_avg > 700) ? 15: 12;
   }
   else if (binary_type == LR3){
-    threshold = 13;
+    threshold = (middle_avg > 700) ? 13 : 11;
   }
   else if(binary_type == LR1){
-    threshold = 13;
+    threshold = (middle_avg > 700) ? 13 : 11;
   }
   else if(binary_type == MR2){
     threshold = 10;
