@@ -426,7 +426,7 @@ void avoid(){
   // }
 
   float middle_avg = (photo2_avg+photo3_avg)/2;
-  if((!check_bits(LR1) && !check_bits(LR3) && !check_bits(SONAR)) || middle_avg < 500){
+  if((!check_bits(LR1) && !check_bits(LR3) && !check_bits(SONAR)) || middle_avg < 600){
     BluetoothSerial.println("NO AVOID REQUIRED");
     avoid_flag = false;
     avoid_command = NULL;
@@ -523,15 +523,15 @@ void robot_move(){
         case FAN_ON:
             stop();
             digitalWrite(fan_pin, HIGH);
-            k = 0.002;
-            ClosedLoopStraight(0);
+            k = 0.001;
+            // ClosedLoopStraight(0);
             // fan_on();
             break;
         case FAN_OFF:
             stop();
             digitalWrite(fan_pin, LOW);
-            k = 0.002;
-            ClosedLoopStraight(0);
+            k = 0.001;
+            // ClosedLoopStraight(0);
             // fan_off();
             break;
         case STOP:
@@ -1027,10 +1027,10 @@ void conv_binary(IR_BINARY binary_type, double reading){
     threshold = 15;
   }
   else if (binary_type == LR3){
-    threshold = 9;
+    threshold = 13;
   }
   else if(binary_type == LR1){
-    threshold = 9;
+    threshold = 13;
   }
   else if(binary_type == MR2){
     threshold = 10;
